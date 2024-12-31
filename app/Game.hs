@@ -38,8 +38,9 @@ data CardsOnTable = CardsOnTable { _red    :: (Card, Card)
                                  }
 makeLenses ''CardsOnTable
 
-data PlayerState = PlayerState { _name        :: String
-                               , _cardsInHand :: [Card]
+data PlayerState = PlayerState { _name           :: String
+                               , _cardsInHand    :: [Card]
+                               , _lastPlayedCard :: Maybe Card
                                }
 makeLenses ''PlayerState
 
@@ -88,7 +89,7 @@ initialize playerNames = do
                                          (startingRangesCardsShuffled !! 2, startingRangesCardsShuffled !! 3)
                                          (startingRangesCardsShuffled !! 4, startingRangesCardsShuffled !! 5)
                                          (startingRangesCardsShuffled !! 6, startingRangesCardsShuffled !! 7)
-      initialPlayerStates = map (`PlayerState` []) playerNames
+      initialPlayerStates = map (\ n -> PlayerState n [] Nothing) playerNames
   shuffledDeck <- shuffleCards unshuffledDeck
 
   let initialGameState = GameState theCardsOnTable shuffledDeck initialPlayerStates
@@ -128,8 +129,9 @@ processPlayerTurnAction card side = do
   thePlayers <- use players
   when (null thePlayers) $ error "processPlayerTurnAction: no players while running a turn."
 
-  currentPlayerName        <- use (players . _head . name)
-  currentPlayerCardsInhand <- use (players . _head . cardsInHand)
+  let lastPlayerCardColor      = (^. color) =<< (last thePlayers ^. lastPlayedCard)
+  let currentPlayerName        = head thePlayers ^. name
+  let currentPlayerCardsInhand = head thePlayers ^. cardsInHand
 
   guard (card `elem` currentPlayerCardsInhand)
 
@@ -159,6 +161,7 @@ processPlayerTurnAction card side = do
   let numberOfCardsToDraw = length $ filter matchingCards otherPlayersCards
   lift $ do
     drawCards numberOfCardsToDraw
+    when (lastPlayerCardColor == card^.color) $ drawCards 1
     endPlayerTurn
 
 -- vim: set sts=2 ts=2 sw=2 tw=120 et :

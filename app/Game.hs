@@ -127,7 +127,7 @@ processPlayerTurnAction
   -> MaybeT (StateT GameState m) ()
 processPlayerTurnAction card side = do
   thePlayers <- use players
-  when (null thePlayers) $ error "processPlayerTurnAction: no players while running a turn."
+  when (null thePlayers) $ error "processPlayerTurnAction: aucun joueur lors de l'exécution du tour d'un joueur?"
 
   let lastPlayerCardColor      = (^. color) =<< (last thePlayers ^. lastPlayedCard)
   let currentPlayerName        = head thePlayers ^. name
@@ -146,7 +146,7 @@ processPlayerTurnAction card side = do
                          Just Yellow -> yellow
                          Just Blue   -> blue
                          Just Purple -> purple
-                         Nothing     -> error "processPlayerTurnAction: A player's card didn't have a color."
+                         Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
 
 
   cardsOnTable . colorLens card . boundaryLens . value .= card^.value

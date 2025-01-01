@@ -154,7 +154,7 @@ processPlayerTurnAction card side = do
   boundaries@(leftBoundary, rightBoundary) <- use (cardsOnTable . colorLens card)
 
   let otherPlayersPredicate p = (p^.name) /= currentPlayerName
-      cardMatchesRange = flip fits boundaries
+      cardMatchesRange        = flip fits boundaries
   otherPlayersCards <- use (players . traverse . filtered otherPlayersPredicate . cardsInHand)
   (players . traverse . filtered otherPlayersPredicate . cardsInHand) %= filter (not . cardMatchesRange)
 

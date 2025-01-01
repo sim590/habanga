@@ -22,7 +22,11 @@ license:             GPL-3.0-or-later
 -- category:
 extra-source-files:  CHANGELOG.md
 
+common common-base
+    build-depends:    base ^>=4.17.2.1
+
 library habanga-core
+    import:           common-base
     exposed-modules:  Game
                       Cards
 
@@ -31,8 +35,7 @@ library habanga-core
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.17.2.1,
-                      lens,
+    build-depends:    lens,
                       mtl,
                       transformers,
                       random

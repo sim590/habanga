@@ -1,9 +1,9 @@
-cabal-version:      2.4
-name:               habanga
-version:            0.1.0.0
+cabal-version:       2.4
+name:                habanga
+version:             0.1.0.0
 
 -- A short (one-line) description of the package.
--- synopsis:
+synopsis:            Le jeu Cabanga implanté en Haskell
 
 -- A longer description of the package.
 -- description:
@@ -13,13 +13,14 @@ version:            0.1.0.0
 
 -- The license under which the package is released.
 -- license:
-author:             Simon Désaulniers
-maintainer:         sim.desaulniers@gmail.com
+author:              Simon Désaulniers
+maintainer:          sim.desaulniers@gmail.com
+license:             GPL-3.0-or-later
 
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files: CHANGELOG.md
+extra-source-files:  CHANGELOG.md
 
 executable habanga
     main-is:          Main.hs
@@ -31,7 +32,7 @@ executable habanga
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
-    build-depends:    base ^>=4.14.3.0,
+    build-depends:    base ^>=4.17.2.1,
                       lens,
                       mtl,
                       transformers,

@@ -114,6 +114,16 @@ drawCards n = do
   (players . _head . cardsInHand) %= (++ take n deckCards)
   deck %= drop n
 
+{-| Retourne le gagnant de la partie.
+
+   Si l'état courant du jeu admet un gagnant, celui-ci est retourné. Autrement,
+   "rien" (Nothing) n'est retourné.
+-}
+winner :: Monad m => StateT GameState m (Maybe PlayerState)
+winner = do
+  thePlayers <- use players
+  return $ find (\ p -> null (p^.cardsInHand)) thePlayers
+
 {-| Effectue les actions associées au tour d'un joueur.
 
    Le joueur joue sa carte, doit piger lorsque d'autres joueurs ont des

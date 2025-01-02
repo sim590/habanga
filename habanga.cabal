@@ -22,23 +22,22 @@ license:             GPL-3.0-or-later
 -- category:
 extra-source-files:  CHANGELOG.md
 
+common common-lang
+    default-language:   Haskell2010
+    ghc-options:        -Wall -Wcompat -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns -Wredundant-constraints
+
 common common-base
-    build-depends:    base ^>=4.17.2.1
+    build-depends:      base ^>=4.17.2.1,
+                        transformers,
+                        lens,
+                        mtl
 
 library habanga-core
-    import:           common-base
-    exposed-modules:  Game
-                      Cards
+    import:             common-base,
+                        common-lang
+    exposed-modules:    Game
+                        Cards
+    build-depends:      random
+    hs-source-dirs:     src/core
 
-    -- Modules included in this executable, other than Main.
-    -- other-modules:
-
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
-    build-depends:    lens,
-                      mtl,
-                      transformers,
-                      random
-
-    hs-source-dirs:   src/core
-    default-language: Haskell2010

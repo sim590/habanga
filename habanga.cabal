@@ -1,9 +1,9 @@
-cabal-version:       2.4
-name:                habanga
-version:             0.1.0.0
+cabal-version: 2.4
+name:          habanga
+version:       0.1.0.0
 
 -- A short (one-line) description of the package.
-synopsis:            Le jeu Cabanga implanté en Haskell
+synopsis:      Le jeu Cabanga implanté en Haskell
 
 -- A longer description of the package.
 -- description:
@@ -13,14 +13,18 @@ synopsis:            Le jeu Cabanga implanté en Haskell
 
 -- The license under which the package is released.
 -- license:
-author:              Simon Désaulniers
-maintainer:          sim.desaulniers@gmail.com
-license:             GPL-3.0-or-later
+author:        Simon Désaulniers
+maintainer:    sim.desaulniers@gmail.com
+license:       GPL-3.0-or-later
 
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files:  CHANGELOG.md
+data-files:    resources/habanga-tui/Habanga-title.txt
+               resources/habanga-tui/habanga-bluecard-35x53.txt
+               resources/habanga-tui/habanga-yellowcard-35x53.txt
+               resources/habanga-tui/habanga-redcard-35x53.txt
+               resources/habanga-tui/habanga-purplecard-35x53.txt
 
 common common-lang
     default-language:   Haskell2010
@@ -41,4 +45,18 @@ library habanga-core
                         Cards
     build-depends:      random
     hs-source-dirs:     src/core
+
+executable habanga-tui
+    import:             common-base,
+                        common-lang
+    main-is:            Main.hs
+    other-modules:      ProgramState,
+                        Paths_habanga
+    autogen-modules:    Paths_habanga
+    build-depends:      habanga-core,
+                        brick,
+                        vty >=6.0,
+                        vty-crossplatform
+    hs-source-dirs:     src/tui
+    ghc-options:        -threaded
 

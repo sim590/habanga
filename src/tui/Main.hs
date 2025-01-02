@@ -8,6 +8,7 @@ import Control.Lens
 
 import Brick.Util (on)
 import Brick.AttrMap
+import qualified Brick.Types as T
 import Brick.Types (Widget)
 import qualified Brick.Main as M
 import qualified Brick.Widgets.Border as B
@@ -19,6 +20,7 @@ import Brick.Widgets.Core ( hLimit
                           , str
                           , vBox
                           , hBox
+                          , visible
                           )
 
 import qualified Graphics.Vty as V
@@ -27,8 +29,16 @@ import ProgramState
 
 import Paths_habanga
 
-button :: String -> Int -> Widget n
-button s w = B.border $ hLimit w $  C.hCenter $ str s
+button
+  :: String       -- ^ Le texte du bouton.
+  -> Int          -- ^ L'index dans le menu.
+  -> Int          -- ^ La largeur du bouton en nombre de caractères.
+  -> ProgramState -- ^ L'état du programme.
+  -> Widget n
+button s i w ps = style $ str s
+  where style      = selectAttr . B.border . hLimit w . C.hCenter
+        selectAttr = if ps^.mainMenuState.menuIndex == i then withAttr (attrName "selectedAttr") . visible
+                                                         else id
 
 drawUI :: ProgramState -> [Widget ()]
 drawUI ps = [ui]
@@ -46,12 +56,33 @@ drawUI ps = [ui]
         menuPanel        = vBox [ C.hCenter $ str "Menu principal"
                                 , C.center menuOptions
                                 ]
-        menuOptions      = vBox $ map C.center $ [ button "Jouer"
-                                                 , button "Options"
-                                                 , button "Quitter"
-                                                 ] <*> [25]
+        buttons          = [ button "Jouer"
+                           , button "Options"
+                           , button "Quitter"
+                           ]
+        menuOptions      = vBox $ map C.center $ appendArgsToButtons buttons 25
 
         titleWidth       = length $ head $ lines (ps^.gameResources.menuGameTitle)
+
+        -- Cette fonction est un peu moins évidente, mais elle assure que les
+        -- indices des boutons sont bien attribués et que la largeur de ceux-ci
+        -- est la même pour tous.
+        appendArgsToButtons bs width = fst (foldl (\ (l, i) f -> (l++[f i], i+1)) ([], 0) bs) <*> [width] <*> [ps]
+
+mainMenuGoUp :: T.EventM () ProgramState ()
+mainMenuGoUp   = mainMenuState.menuIndex %= max 0 . subtract 1
+
+mainMenuGoDown :: T.EventM () ProgramState ()
+mainMenuGoDown = mainMenuState.menuIndex %= min 2 . (+ 1)
+
+appEvent :: T.BrickEvent () e -> T.EventM () ProgramState ()
+appEvent (T.VtyEvent (V.EvKey V.KDown       [] )) = mainMenuGoDown
+appEvent (T.VtyEvent (V.EvKey (V.KChar 'j') [] )) = mainMenuGoDown
+appEvent (T.VtyEvent (V.EvKey V.KUp         [] )) = mainMenuGoUp
+appEvent (T.VtyEvent (V.EvKey (V.KChar 'k') [] )) = mainMenuGoUp
+appEvent (T.VtyEvent (V.EvKey V.KEsc        [] )) = M.halt
+appEvent (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = M.halt
+appEvent _                                        = return ()
 
 theMap :: AttrMap
 theMap = attrMap V.defAttr [ (attrName "selectedAttr",    V.black   `on` V.white)
@@ -62,7 +93,7 @@ theMap = attrMap V.defAttr [ (attrName "selectedAttr",    V.black   `on` V.white
 app :: M.App ProgramState () ()
 app = M.App { M.appDraw         = drawUI
             , M.appChooseCursor = M.neverShowCursor
-            , M.appHandleEvent  = M.resizeOrQuit
+            , M.appHandleEvent  = appEvent
             , M.appStartEvent   = return ()
             , M.appAttrMap      = const theMap
             }

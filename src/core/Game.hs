@@ -102,7 +102,9 @@ initialize playerNames = do
    du joueur.
 -}
 endPlayerTurn :: Monad m => StateT GameState m ()
-endPlayerTurn = players %= \ (p:others) -> others ++ [p]
+endPlayerTurn = players %= cycleAround
+  where cycleAround (p:others) = others ++ [p]
+        cycleAround [] = error "endPlayerTurn: aucun joueur!"
 
 {-| Tire une carte du paquet
 -}
@@ -152,12 +154,12 @@ processPlayerTurnAction card side = do
                        LeftBoundary  -> _1
                        RightBoundary -> _2
 
-  let colorLens card = case card^.color of
-                         Just Red    -> red
-                         Just Yellow -> yellow
-                         Just Blue   -> blue
-                         Just Purple -> purple
-                         Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
+  let colorLens c = case c^.color of
+                      Just Red    -> red
+                      Just Yellow -> yellow
+                      Just Blue   -> blue
+                      Just Purple -> purple
+                      Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
 
 
   cardsOnTable . colorLens card . boundaryLens . value .= card^.value

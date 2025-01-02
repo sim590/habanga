@@ -63,13 +63,15 @@ fits (Card v0 col0) (Card v1 col1, Card v2 col2)
   | otherwise    = min v1 v2 < v0 && v0 < max v1 v2
 
 shuffleCards :: [Card] -> IO [Card]
-shuffleCards cards = flip evalStateT cards $ forM [1..length cards] $ \ _ -> do
+shuffleCards cards = flip evalStateT cards $ replicateM (length cards) $ do
   l <- get
   s <- randomIO
-  let r            = s `mod` length l
-      (beg, c:end) = splitAt r l
-  put (beg ++ end)
-  return c
+  let r = s `mod` length l
+  case splitAt r l of
+    (beg, c:end) -> do
+      put (beg ++ end)
+      return c
+    (_, []) -> error "shuffleCards: la liste était vide. Ceci n'aurait pas dû se produire..."
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

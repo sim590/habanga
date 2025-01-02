@@ -16,12 +16,8 @@
 
 module Game where
 
-import System.Random
-
 import Data.Default
-import Data.Int
 import qualified Data.List as List
-import Data.Maybe
 
 import Control.Monad
 import Control.Monad.Trans.Maybe
@@ -89,7 +85,6 @@ initialize
   :: [String] -- ^ Les noms des différents joueurs.
   -> IO GameState
 initialize playerNames = do
-  seed <- (randomIO :: IO Int64)
   startingRangesCardsShuffled <- shuffleCards startingRangesCardList
   let theCardsOnTable     = CardsOnTable (startingRangesCardsShuffled !! 0, startingRangesCardsShuffled !! 1)
                                          (startingRangesCardsShuffled !! 2, startingRangesCardsShuffled !! 3)
@@ -167,7 +162,7 @@ processPlayerTurnAction card side = do
 
   cardsOnTable . colorLens card . boundaryLens . value .= card^.value
 
-  boundaries@(leftBoundary, rightBoundary) <- use (cardsOnTable . colorLens card)
+  boundaries <- use (cardsOnTable . colorLens card)
 
   let otherPlayersPredicate p = (p^.name) /= currentPlayerName
       cardMatchesRange        = flip fits boundaries

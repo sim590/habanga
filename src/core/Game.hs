@@ -20,7 +20,7 @@ import System.Random
 
 import Data.Default
 import Data.Int
-import Data.List
+import qualified Data.List as List
 import Data.Maybe
 
 import Control.Monad
@@ -61,22 +61,22 @@ instance Default GameState where
   def = GameState def [] []
 
 instance Show CardsOnTable where
-  show cs = intercalate "\n" [ "Red: "    ++ "\n\t" ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)
-                             , "Yellow: " ++ "\n\t" ++ show (cs^.yellow._1.value) ++ ", " ++ show (cs^.yellow._2.value)
-                             , "Blue: "   ++ "\n\t" ++ show (cs^.blue._1.value)   ++ ", " ++ show (cs^.blue._2.value)
-                             , "Purple: " ++ "\n\t" ++ show (cs^.purple._1.value) ++ ", " ++ show (cs^.purple._2.value)
-                             ]
+  show cs = List.intercalate "\n" [ "Red: "    ++ "\n\t" ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)
+                                  , "Yellow: " ++ "\n\t" ++ show (cs^.yellow._1.value) ++ ", " ++ show (cs^.yellow._2.value)
+                                  , "Blue: "   ++ "\n\t" ++ show (cs^.blue._1.value)   ++ ", " ++ show (cs^.blue._2.value)
+                                  , "Purple: " ++ "\n\t" ++ show (cs^.purple._1.value) ++ ", " ++ show (cs^.purple._2.value)
+                                  ]
 
 instance Show GameState where
-  show gs = intercalate "\n" [ "Deck: "      ++ "\n" ++ "\t" ++ show (gs^.deck)
-                             , "Players: "
-                             ]
+  show gs = List.intercalate "\n" [ "Deck: "      ++ "\n" ++ "\t" ++ show (gs^.deck)
+                                  , "Players: "
+                                  ]
          ++ "\n"
-         ++ intercalate "\n" (map (("\t"++) . show) (gs^.players))
+         ++ List.intercalate "\n" (map (("\t"++) . show) (gs^.players))
          ++ "\n"
-         ++ intercalate "\n" [ "Cards on table:"
-                             , intercalate "\n" $ map ("\t"++) (lines (show $ gs^.cardsOnTable))
-                             ]
+         ++ List.intercalate "\n" [ "Cards on table:"
+                                  , List.intercalate "\n" $ map ("\t"++) (lines (show $ gs^.cardsOnTable))
+                                  ]
 
 {-| Fait l'initialisation de l'état du jeu.
 
@@ -128,7 +128,7 @@ drawCards n = do
 winner :: Monad m => StateT GameState m (Maybe PlayerState)
 winner = do
   thePlayers <- use players
-  return $ find (\ p -> null (p^.cardsInHand)) thePlayers
+  return $ List.find (\ p -> null (p^.cardsInHand)) thePlayers
 
 {-| Effectue les actions associées au tour d'un joueur.
 
@@ -151,7 +151,7 @@ processPlayerTurnAction card side = do
 
   guard (card `elem` currentPlayerCardsInhand)
 
-  (players . _head . cardsInHand) %= delete card
+  (players . _head . cardsInHand) %= List.delete card
 
   let boundaryLens = case side of
                        LeftBoundary  -> _1

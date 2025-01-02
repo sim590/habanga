@@ -31,7 +31,8 @@ common common-base
     build-depends:      base ^>=4.17.2.1,
                         transformers,
                         lens,
-                        mtl
+                        mtl,
+                        data-default
 
 library habanga-core
     import:             common-base,

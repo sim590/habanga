@@ -19,6 +19,8 @@ module Cards where
 
 import System.Random
 
+import Data.Default
+
 import Control.Monad.State
 import Control.Lens
 
@@ -30,6 +32,9 @@ data Card  = Card { _value :: Int
                   }
                   deriving Eq
 makeLenses ''Card
+
+instance Default Card where
+  def = Card 0 Nothing
 
 instance Show Card where
   show card = colorString ++ "(" ++ show (card^.value) ++ ")"

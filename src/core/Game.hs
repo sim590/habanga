@@ -18,6 +18,7 @@ module Game where
 
 import System.Random
 
+import Data.Default
 import Data.Int
 import Data.List
 import Data.Maybe
@@ -38,6 +39,9 @@ data CardsOnTable = CardsOnTable { _red    :: (Card, Card)
                                  }
 makeLenses ''CardsOnTable
 
+instance Default CardsOnTable where
+  def = CardsOnTable def def def def
+
 data PlayerState = PlayerState { _name           :: String
                                , _cardsInHand    :: [Card]
                                , _lastPlayedCard :: Maybe Card
@@ -53,6 +57,8 @@ data GameState = GameState { _cardsOnTable :: CardsOnTable
                            }
 makeLenses ''GameState
 
+instance Default GameState where
+  def = GameState def [] []
 
 instance Show CardsOnTable where
   show cs = intercalate "\n" [ "Red: "    ++ "\n\t" ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)

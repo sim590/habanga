@@ -49,12 +49,11 @@ event (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = M.halt
 event _                                        = return ()
 
 widget :: ProgramState -> Widget ()
-widget ps = ui
-  where ui = hBox [ leftPanel
-                  , hLimit titleWidth middlePanel
-                  , rightPanel
-                  ]
-        sidePanelStyle a = C.center . withBorderStyle BS.unicodeRounded . B.border . withAttr (attrName a) . str
+widget ps = hBox [ leftPanel
+                 , hLimit titleWidth middlePanel
+                 , rightPanel
+                 ]
+  where sidePanelStyle a = C.center . withBorderStyle BS.unicodeRounded . B.border . withAttr (attrName a) . str
         leftPanel        = sidePanelStyle "blueCard35x53"   $ ps^.gameResources.blueCard35x53
         rightPanel       = sidePanelStyle "purpleCard35x53" $ ps^.gameResources.purpleCard35x53
 

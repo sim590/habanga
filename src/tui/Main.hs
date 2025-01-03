@@ -9,10 +9,12 @@ import Control.Monad
 import Control.Lens
 
 import Brick.AttrMap
-import qualified Brick.Types as T
+import Brick.Types ( BrickEvent
+                   , EventM
+                   )
 import qualified Brick.Main as M
 
-import qualified Graphics.Vty as V
+import Graphics.Vty (defAttr)
 
 import ProgramState
 import Widgets
@@ -21,13 +23,13 @@ import qualified MainMenu
 
 import Paths_habanga
 
-appEvent :: T.BrickEvent () e -> T.EventM () ProgramState ()
+appEvent :: BrickEvent () e -> EventM () ProgramState ()
 appEvent e = use currentScreen >>= \ case
   Just MainMenu -> MainMenu.event e
   _             -> return ()
 
 attrsMap :: AttrMap
-attrsMap = attrMap V.defAttr $  buttonAttrs
+attrsMap = attrMap defAttr $  buttonAttrs
                            <> MainMenu.attrs
 
 app :: M.App ProgramState () ()

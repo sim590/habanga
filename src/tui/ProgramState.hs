@@ -45,6 +45,7 @@ instance Default MainMenuState where
   def = MainMenuState 0
 
 data Screen = MainMenu | OptionsMenu | Game
+  deriving Show
 
 data ProgramState = ProgramState { _gameState     :: GameState
                                  , _gameResources :: ProgramResources

@@ -3,6 +3,7 @@
 
 module Main where
 
+import Data.Maybe
 import Data.Default
 import Data.Map.Strict ((!))
 import qualified Data.Map.Strict as Map
@@ -13,6 +14,7 @@ import Control.Lens
 import Brick.AttrMap
 import Brick.Types ( BrickEvent
                    , EventM
+                   , Widget
                    )
 import qualified Brick.Main as M
 
@@ -34,8 +36,13 @@ attrsMap :: AttrMap
 attrsMap = attrMap defAttr $  buttonAttrs
                            <> MainMenu.attrs
 
+drawUI :: ProgramState -> [Widget ()]
+drawUI ps = case ps^.currentScreen of
+  Just MainMenu -> [MainMenu.widget ps]
+  s             -> error $ "drawUI: l'écran '" <> show (fromJust s) <> "' n'est pas implanté!"
+
 app :: M.App ProgramState () ()
-app = M.App { M.appDraw         = \ ps -> map ($ ps) [MainMenu.widget]
+app = M.App { M.appDraw         = drawUI
             , M.appChooseCursor = M.neverShowCursor
             , M.appHandleEvent  = appEvent
             , M.appStartEvent   = return ()

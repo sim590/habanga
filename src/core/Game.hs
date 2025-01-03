@@ -11,9 +11,6 @@
   des mécanismes de jeu devrait être écrit sous ce module.
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
 module Game ( initialize
             , winner
             , processPlayerTurnAction

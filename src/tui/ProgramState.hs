@@ -6,7 +6,7 @@ module ProgramState where
 import Data.Default
 import Control.Lens
 
-import Game
+import GameState
 
 _HABANGA_MENU_GAMETITLE_FILE_PATH_ :: String
 _HABANGA_MENU_GAMETITLE_FILE_PATH_ = "resources/habanga-tui/Habanga-title.txt"

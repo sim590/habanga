@@ -17,10 +17,8 @@
 module Game ( initialize
             , winner
             , processPlayerTurnAction
-            , GameState
             ) where
 
-import Data.Default
 import qualified Data.List as List
 
 import Control.Monad
@@ -29,54 +27,9 @@ import Control.Monad.State
 import Control.Lens
 
 import Cards
+import GameState
 
 data RangeBoundary = LeftBoundary | RightBoundary
-
-data CardsOnTable = CardsOnTable { _red    :: (Card, Card)
-                                 , _yellow :: (Card, Card)
-                                 , _blue   :: (Card, Card)
-                                 , _purple :: (Card, Card)
-                                 }
-makeLenses ''CardsOnTable
-
-instance Default CardsOnTable where
-  def = CardsOnTable def def def def
-
-data PlayerState = PlayerState { _name           :: String
-                               , _cardsInHand    :: [Card]
-                               , _lastPlayedCard :: Maybe Card
-                               }
-makeLenses ''PlayerState
-
-instance Show PlayerState where
-  show p = (p^.name) ++ ": " ++ show (p^.cardsInHand)
-
-data GameState = GameState { _cardsOnTable :: CardsOnTable
-                           , _deck         :: [Card]
-                           , _players      :: [PlayerState]
-                           }
-makeLenses ''GameState
-
-instance Default GameState where
-  def = GameState def [] []
-
-instance Show CardsOnTable where
-  show cs = List.intercalate "\n" [ "Red: "    ++ "\n\t" ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)
-                                  , "Yellow: " ++ "\n\t" ++ show (cs^.yellow._1.value) ++ ", " ++ show (cs^.yellow._2.value)
-                                  , "Blue: "   ++ "\n\t" ++ show (cs^.blue._1.value)   ++ ", " ++ show (cs^.blue._2.value)
-                                  , "Purple: " ++ "\n\t" ++ show (cs^.purple._1.value) ++ ", " ++ show (cs^.purple._2.value)
-                                  ]
-
-instance Show GameState where
-  show gs = List.intercalate "\n" [ "Deck: "      ++ "\n" ++ "\t" ++ show (gs^.deck)
-                                  , "Players: "
-                                  ]
-         ++ "\n"
-         ++ List.intercalate "\n" (map (("\t"++) . show) (gs^.players))
-         ++ "\n"
-         ++ List.intercalate "\n" [ "Cards on table:"
-                                  , List.intercalate "\n" $ map ("\t"++) (lines (show $ gs^.cardsOnTable))
-                                  ]
 
 {-| Fait l'initialisation de l'état du jeu.
 

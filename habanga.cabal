@@ -43,6 +43,7 @@ library habanga-core
                         common-lang
     exposed-modules:    Game
                         Cards
+                        GameState
     build-depends:      random
     hs-source-dirs:     src/core
 

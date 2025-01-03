@@ -56,6 +56,7 @@ executable habanga-tui
                         Paths_habanga
     autogen-modules:    Paths_habanga
     build-depends:      habanga-core,
+                        containers,
                         brick,
                         vty >=6.0,
                         vty-crossplatform

@@ -44,12 +44,17 @@ makeLenses ''MainMenuState
 instance Default MainMenuState where
   def = MainMenuState 0
 
+data Screen = MainMenu | OptionsMenu | Game
+
 data ProgramState = ProgramState { _gameState     :: GameState
                                  , _gameResources :: ProgramResources
                                  , _mainMenuState :: MainMenuState
+                                 , _currentScreen :: Maybe Screen
                                  }
 makeLenses ''ProgramState
 
 instance Default ProgramState where
-  def = ProgramState def def def
+  def = ProgramState def def def def
+
+--  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

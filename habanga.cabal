@@ -51,6 +51,8 @@ executable habanga-tui
                         common-lang
     main-is:            Main.hs
     other-modules:      ProgramState,
+                        MainMenu,
+                        Widgets
                         Paths_habanga
     autogen-modules:    Paths_habanga
     build-depends:      habanga-core,

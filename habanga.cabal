@@ -20,11 +20,16 @@ license:       GPL-3.0-or-later
 -- A copyright notice.
 -- copyright:
 -- category:
-data-files:    resources/habanga-tui/Habanga-title.txt
+data-files:    
+               resources/habanga-tui/habanga-bluecard-10x15.txt
                resources/habanga-tui/habanga-bluecard-35x53.txt
-               resources/habanga-tui/habanga-yellowcard-35x53.txt
-               resources/habanga-tui/habanga-redcard-35x53.txt
+               resources/habanga-tui/habanga-purplecard-10x15.txt
                resources/habanga-tui/habanga-purplecard-35x53.txt
+               resources/habanga-tui/habanga-redcard-10x15.txt
+               resources/habanga-tui/habanga-redcard-35x53.txt
+               resources/habanga-tui/Habanga-title.txt
+               resources/habanga-tui/habanga-yellowcard-10x15.txt
+               resources/habanga-tui/habanga-yellowcard-35x53.txt
 
 common common-lang
     default-language:   Haskell2010
@@ -53,6 +58,7 @@ executable habanga-tui
     main-is:            Main.hs
     other-modules:      ProgramState,
                         MainMenu,
+                        GameView,
                         Widgets
                         Paths_habanga
     autogen-modules:    Paths_habanga

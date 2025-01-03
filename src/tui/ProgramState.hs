@@ -47,10 +47,10 @@ instance Default MainMenuState where
 data Screen = MainMenu | OptionsMenu | Game
   deriving Show
 
-data ProgramState = ProgramState { _gameState     :: GameState
-                                 , _gameResources :: ProgramResources
-                                 , _mainMenuState :: MainMenuState
-                                 , _currentScreen :: Maybe Screen
+data ProgramState = ProgramState { _gameState        :: GameState
+                                 , _programResources :: ProgramResources
+                                 , _mainMenuState    :: MainMenuState
+                                 , _currentScreen    :: Maybe Screen
                                  }
 makeLenses ''ProgramState
 

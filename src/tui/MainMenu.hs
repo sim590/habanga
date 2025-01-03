@@ -54,10 +54,10 @@ widget ps = hBox [ leftPanel
                  , rightPanel
                  ]
   where sidePanelStyle a = C.center . withBorderStyle BS.unicodeRounded . B.border . withAttr (attrName a) . str
-        leftPanel        = sidePanelStyle "blueCard35x53"   $ ps^.gameResources.blueCard35x53
-        rightPanel       = sidePanelStyle "purpleCard35x53" $ ps^.gameResources.purpleCard35x53
+        leftPanel        = sidePanelStyle "blueCard35x53"   $ ps^.programResources.blueCard35x53
+        rightPanel       = sidePanelStyle "purpleCard35x53" $ ps^.programResources.purpleCard35x53
 
-        middlePanel      = vBox [ C.hCenter $ str $ ps^.gameResources.menuGameTitle
+        middlePanel      = vBox [ C.hCenter $ str $ ps^.programResources.menuGameTitle
                                 , C.hCenter $ B.border $ hLimit titleWidth $ C.center menuPanel
                                 ]
         menuPanel        = vBox [ C.hCenter $ str "Menu principal"
@@ -69,7 +69,7 @@ widget ps = hBox [ leftPanel
                            ]
         menuOptions      = vBox $ map C.center $ appendArgsToButtons buttons 25
 
-        titleWidth       = length $ head $ lines (ps^.gameResources.menuGameTitle)
+        titleWidth       = length $ head $ lines (ps^.programResources.menuGameTitle)
 
         -- Cette fonction est un peu moins évidente, mais elle assure que les
         -- indices des boutons sont bien attribués et que la largeur de ceux-ci

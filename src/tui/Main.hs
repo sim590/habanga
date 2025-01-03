@@ -49,8 +49,8 @@ app = M.App { M.appDraw         = drawUI
             , M.appAttrMap      = const attrsMap
             }
 
-loadGameResources :: IO (Map.Map String String)
-loadGameResources = do
+loadProgramResources :: IO (Map.Map String String)
+loadProgramResources = do
   let f acc p@(_,v) = (:acc) . (\ s -> set _2 s p) <$> loadResourceContent v
       loadResourceContent = readFile <=< getDataFileName
   Map.fromList <$> foldM f [] [ ("theMenuGameTitle",   _HABANGA_MENU_GAMETITLE_FILE_PATH_)
@@ -60,11 +60,11 @@ loadGameResources = do
 
 main :: IO ()
 main = do
-  resMap <- loadGameResources
-  void $ M.defaultMain app def { _gameResources = def { _menuGameTitle   = resMap!"theMenuGameTitle"
-                                                      , _blueCard35x53   = resMap!"theBlueCard35x53"
-                                                      , _purpleCard35x53 = resMap!"thePurpleCard35x53"
-                                                      }
+  resMap <- loadProgramResources
+  void $ M.defaultMain app def { _programResources = def { _menuGameTitle   = resMap!"theMenuGameTitle"
+                                                         , _blueCard35x53   = resMap!"theBlueCard35x53"
+                                                         , _purpleCard35x53 = resMap!"thePurpleCard35x53"
+                                                         }
                                , _currentScreen = Just MainMenu
                                }
 

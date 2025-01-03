@@ -14,7 +14,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Game where
+module Game ( initialize
+            , winner
+            , processPlayerTurnAction
+            , GameState
+            ) where
 
 import Data.Default
 import qualified Data.List as List

@@ -51,7 +51,7 @@ event (T.VtyEvent (V.EvKey V.KRight      [] )) = goRight
 event (T.VtyEvent (V.EvKey (V.KChar 'l') [] )) = goRight
 event (T.VtyEvent (V.EvKey V.KLeft       [] )) = goLeft
 event (T.VtyEvent (V.EvKey (V.KChar 'h') [] )) = goLeft
-event (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = M.halt
+event (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = currentScreen .= Just MainMenu
 event _                                        = return ()
 
 goLeft :: T.EventM () ProgramState ()

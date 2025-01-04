@@ -67,9 +67,6 @@ widget ps = vBox [ C.hCenter $ hBox $ playerCardsButtons currentCardsInHand
                  , C.center  $ vBox $ map hBox cardsOnTableMatrix
                  ]
   where
-    -- CAS D'EXEMPLE DE LA PUISSANCE DES SUGGESTIONS DE L'ANALYSEUR SYNTAXIQUE
-    -- playerCardsButtons cards = map (\ (i, c) -> C.hCenter $ button (show c) i 15 ps) $ zip [0..] cards
-    -- ... remplacé par ... ->
     btn i c            = button (show $ c^.value) i 15 (ps^.gameViewState.gameViewIndex) (colorAttrFromCard c True)
     playerCardsButtons = zipWith (\ i c -> C.hCenter $ withAttr (colorAttrFromCard c False) $ btn i c) [0..]
     currentPlayer      = head $ ps^.gameState.players

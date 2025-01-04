@@ -55,30 +55,30 @@ initialize playerNames = do
 {-| Exécute toute les actions nécessaires lors de la terminaison du tour
    du joueur.
 -}
-endPlayerTurn :: Monad m => StateT GameState m ()
-endPlayerTurn = players %= cycleAround
+endPlayerTurn :: (MonadState s m, GameStated s) => m ()
+endPlayerTurn = gameStateLens . players %= cycleAround
   where cycleAround (p:others) = others ++ [p]
         cycleAround [] = error "endPlayerTurn: aucun joueur!"
 
 {-| Tire une carte du paquet
 -}
 drawCards
-  :: Monad m
+  :: (MonadState s m, GameStated s)
   => Int -- ^ Le nombre de cartes à tirer du paquet.
-  -> StateT GameState m ()
+  -> m ()
 drawCards n = do
-  deckCards <- use deck
-  (players . _head . cardsInHand) %= (++ take n deckCards)
-  deck %= drop n
+  deckCards <- use $ gameStateLens . deck
+  (gameStateLens . players . _head . cardsInHand) %= (++ take n deckCards)
+  gameStateLens . deck %= drop n
 
 {-| Retourne le gagnant de la partie.
 
    Si l'état courant du jeu admet un gagnant, celui-ci est retourné. Autrement,
    "rien" (Nothing) n'est retourné.
 -}
-winner :: Monad m => StateT GameState m (Maybe PlayerState)
+winner :: (MonadState s m, GameStated s) => m (Maybe PlayerState)
 winner = do
-  thePlayers <- use players
+  thePlayers <- use $ gameStateLens . players
   return $ List.find (\ p -> null (p^.cardsInHand)) thePlayers
 
 {-| Effectue les actions associées au tour d'un joueur.
@@ -87,13 +87,13 @@ winner = do
    cartes en relation à l'interval nouvellement créé par le joueur.
 -}
 processPlayerTurnAction
-  :: Monad m
+  :: (MonadState s m, GameStated s)
   => Card          -- ^ La carte jouée par le joueur.
   -> RangeBoundary -- ^ Le côté où placer la carte du joueur (gauche/droite) selon la couleur de
                    --   celle-ci.
-  -> MaybeT (StateT GameState m) ()
+  -> MaybeT m ()
 processPlayerTurnAction card side = do
-  thePlayers <- use players
+  thePlayers <- use $ gameStateLens . players
   when (null thePlayers) $ error "processPlayerTurnAction: aucun joueur lors de l'exécution du tour d'un joueur?"
 
   let lastPlayerCardColor      = (^. color) =<< (last thePlayers ^. lastPlayedCard)
@@ -102,7 +102,7 @@ processPlayerTurnAction card side = do
 
   guard (card `elem` currentPlayerCardsInhand)
 
-  (players . _head . cardsInHand) %= List.delete card
+  (gameStateLens . players . _head . cardsInHand) %= List.delete card
 
   let boundaryLens = case side of
                        LeftBoundary  -> _1
@@ -116,20 +116,19 @@ processPlayerTurnAction card side = do
                       Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
 
 
-  cardsOnTable . colorLens card . boundaryLens . value .= card^.value
+  gameStateLens . cardsOnTable . colorLens card . boundaryLens . value .= card^.value
 
-  boundaries <- use (cardsOnTable . colorLens card)
+  boundaries <- use (gameStateLens . cardsOnTable . colorLens card)
 
   let otherPlayersPredicate p = (p^.name) /= currentPlayerName
       cardMatchesRange        = flip fits boundaries
-  otherPlayersCards <- use (players . traverse . filtered otherPlayersPredicate . cardsInHand)
-  (players . traverse . filtered otherPlayersPredicate . cardsInHand) %= filter (not . cardMatchesRange)
+  otherPlayersCards <- use (gameStateLens . players . traverse . filtered otherPlayersPredicate . cardsInHand)
+  (gameStateLens . players . traverse . filtered otherPlayersPredicate . cardsInHand) %= filter (not . cardMatchesRange)
 
   let numberOfCardsToDraw = length $ filter cardMatchesRange otherPlayersCards
-  lift $ do
-    drawCards numberOfCardsToDraw
-    when (lastPlayerCardColor == card^.color) $ drawCards 1
-    endPlayerTurn
+  drawCards numberOfCardsToDraw
+  when (lastPlayerCardColor == card^.color) $ drawCards 1
+  endPlayerTurn
 
 -- vim: set sts=2 ts=2 sw=2 tw=120 et :
 

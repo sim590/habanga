@@ -46,6 +46,14 @@ data GameState = GameState { _cardsOnTable :: CardsOnTable
                            }
 makeLenses ''GameState
 
+class GameStated a where
+  getGameState :: a -> GameState
+  setGameState :: a -> GameState -> a
+
+instance GameStated GameState where
+  getGameState = id
+  setGameState _ gs = gs
+
 instance Default GameState where
   def = GameState def [] []
 
@@ -66,6 +74,14 @@ instance Show GameState where
          ++ List.intercalate "\n" [ "Cards on table:"
                                   , List.intercalate "\n" $ map ("\t"++) (lines (show $ gs^.cardsOnTable))
                                   ]
+
+{-| Lentille (Lens' s GameState)
+
+   Ceci permet d'interagir avec GameState dans (MonadState s).
+-}
+gameStateLens :: (GameStated s, Functor f)
+              => (GameState -> f GameState) -> s -> f s --
+gameStateLens g s = fmap (setGameState s) (g $ getGameState s)
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

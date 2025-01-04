@@ -86,5 +86,9 @@ makeLenses ''ProgramState
 instance Default ProgramState where
   def = ProgramState def def def def def
 
+instance GameStated ProgramState where
+  getGameState       = _gameState
+  setGameState ps gs = ps { _gameState = gs }
+
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

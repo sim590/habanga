@@ -71,13 +71,13 @@ loadProgramResources :: IO (Map.Map String String)
 loadProgramResources = do
   let f acc p@(_,v) = (:acc) . (\ s -> set _2 s p) <$> loadResourceContent v
       loadResourceContent = readFile <=< getDataFileName
-  Map.fromList <$> foldM f [] [ ("theMenuGameTitle",    _HABANGA_MENU_GAMETITLE_FILE_PATH_ )
-                              , ("theBlueCard35x53",    _HABANGA_BLUECARD_35X53_           )
-                              , ("thePurpleCard35x53",  _HABANGA_PURPLECARD_35X53_         )
-                              , ("theBlueCard10x15",    _HABANGA_BLUECARD_10X15            )
-                              , ("theRedCard10x15",     _HABANGA_REDCARD_10X15             )
-                              , ("theYellowCard10x15",  _HABANGA_YELLOWCARD_10X15          )
-                              , ("thePurpleCard10x15",  _HABANGA_PURPLECARD_10X15          )
+  Map.fromList <$> foldM f [] [ ("theMenuGameTitle",    _HABANGA_MENU_GAMETITLE_FILE_PATH_)
+                              , ("theBlueCard35x53",    _HABANGA_BLUECARD_35X53_          )
+                              , ("thePurpleCard35x53",  _HABANGA_PURPLECARD_35X53_        )
+                              , ("theBlueCard10x15",    _HABANGA_BLUECARD_10X15           )
+                              , ("theRedCard10x15",     _HABANGA_REDCARD_10X15            )
+                              , ("theYellowCard10x15",  _HABANGA_YELLOWCARD_10X15         )
+                              , ("thePurpleCard10x15",  _HABANGA_PURPLECARD_10X15         )
                               ]
 
 main :: IO ()

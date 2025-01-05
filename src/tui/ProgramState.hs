@@ -100,11 +100,13 @@ makeLenses ''MainMenuState
 instance Default MainMenuState where
   def = MainMenuState 0 Nothing
 
-newtype GameViewState = GameViewState { _gameViewIndex :: Int }
+data GameViewState = GameViewState { _gameViewIndex :: Int
+                                   , _winner        :: Maybe String
+                                   }
 makeLenses ''GameViewState
 
 instance Default GameViewState where
-  def = GameViewState 0
+  def = GameViewState 0 Nothing
 
 data ProgramState = ProgramState { _gameState        :: GameState
                                  , _programResources :: ProgramResources

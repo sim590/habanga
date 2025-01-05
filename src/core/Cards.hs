@@ -47,7 +47,7 @@ startingRangesCardList = map (`Card` Nothing) [1, 3, 5, 7, 12, 14, 16, 18]
 unshuffledDeck :: [Card]
 unshuffledDeck = map (`Card` Just Blue)   [1..18]
               ++ map (`Card` Just Yellow) [1..18]
-              ++ map (`Card` Just Blue)   [1..18]
+              ++ map (`Card` Just Red)    [1..18]
               ++ map (`Card` Just Purple) [1..18]
 
 {-| Détermine si une carte peut s'insérer ou non dans un intervalle

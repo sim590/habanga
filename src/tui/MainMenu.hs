@@ -13,11 +13,6 @@ import Data.Maybe
 import Control.Lens
 import Control.Monad.State
 
-import Brick ( Padding (Pad)
-             , padBottom
-             , fill
-             , (<+>)
-             )
 import Brick.AttrMap
 import Brick.Forms
 import qualified Brick.Types as T
@@ -29,13 +24,17 @@ import qualified Brick.Main as M
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
-import Brick.Widgets.Core ( hLimit
+import Brick.Widgets.Core ( Padding (Pad)
+                          , padBottom
+                          , hLimit
                           , vLimit
                           , withAttr
                           , withBorderStyle
                           , str
                           , vBox
                           , hBox
+                          , fill
+                          , (<+>)
                           )
 
 import qualified Graphics.Vty as V

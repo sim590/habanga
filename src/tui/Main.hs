@@ -1,6 +1,4 @@
 
-{-# LANGUAGE LambdaCase #-}
-
 module Main where
 
 import Data.Maybe
@@ -34,15 +32,15 @@ import qualified GameView
 import Paths_habanga
 
 appEvent :: BrickEvent AppFocus () -> EventM AppFocus ProgramState ()
-appEvent e = use currentScreen >>= \ case
-  Just MainMenu -> MainMenu.event e
-  Just Game     -> GameView.event e
-  _             -> return ()
+appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
+  Just (MainMenu _) -> MainMenu.event e
+  Just Game         -> GameView.event e
+  _                 -> return ()
 
 appChooseCursor :: ProgramState -> [CursorLocation AppFocus] -> Maybe (CursorLocation AppFocus)
-appChooseCursor ps = case ps ^. currentScreen of
-  Just MainMenu -> focusRingCursor formFocus $ (ps ^. mainMenuState . submenu) ^?! _Just . gameForm
-  _             -> const Nothing
+appChooseCursor ps = case focusGetCurrent (ps ^. currentFocus) of
+  Just (MainMenu _) -> focusRingCursor formFocus $ (ps ^. mainMenuState . submenu) ^?! _Just . gameForm
+  _                 -> const Nothing
 
 attrsMap :: AttrMap
 attrsMap = attrMap defAttr $ [ (attrName "selectedAttr",       V.black   `on` V.white)
@@ -62,16 +60,16 @@ attrsMap = attrMap defAttr $ [ (attrName "selectedAttr",       V.black   `on` V.
                            <> GameView.attrs
 
 drawUI :: ProgramState -> [Widget AppFocus]
-drawUI ps = case ps^.currentScreen of
-  Just MainMenu -> MainMenu.widget ps
-  Just Game     -> GameView.widget ps
-  s             -> error $ "drawUI: l'écran '" <> show (fromJust s) <> "' n'est pas implanté!"
+drawUI ps = case focusGetCurrent (ps^.currentFocus) of
+  Just (MainMenu _) -> MainMenu.widget ps
+  Just Game         -> GameView.widget ps
+  s                 -> error $ "drawUI: l'écran '" <> show (fromJust s) <> "' n'est pas implanté!"
 
 app :: M.App ProgramState () AppFocus
 app = M.App { M.appDraw         = drawUI
             , M.appChooseCursor = appChooseCursor
             , M.appHandleEvent  = appEvent
-            , M.appStartEvent   = return ()
+            , M.appStartEvent   = currentFocus %= focusSetCurrent (MainMenu MainMenuButtons)
             , M.appAttrMap      = const attrsMap
             }
 
@@ -99,7 +97,6 @@ main = do
                                                          , _yellowCard10x15 = resMap!"theYellowCard10x15"
                                                          , _purpleCard10x15 = resMap!"thePurpleCard10x15"
                                                          }
-                               , _currentScreen = Just MainMenu
                                }
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :

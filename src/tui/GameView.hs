@@ -7,6 +7,8 @@ module GameView ( event
 import Control.Lens
 
 import Brick.AttrMap
+import Brick.Focus ( focusSetCurrent
+                   )
 import qualified Brick.Types as T
 import Brick.Types (Widget)
 import qualified Brick.Main as M
@@ -51,7 +53,7 @@ event (T.VtyEvent (V.EvKey V.KRight      [] )) = goRight
 event (T.VtyEvent (V.EvKey (V.KChar 'l') [] )) = goRight
 event (T.VtyEvent (V.EvKey V.KLeft       [] )) = goLeft
 event (T.VtyEvent (V.EvKey (V.KChar 'h') [] )) = goLeft
-event (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = currentScreen .= Just MainMenu
+event (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = currentFocus %= focusSetCurrent (MainMenu MainMenuButtons)
 event _                                        = return ()
 
 goLeft :: T.EventM AppFocus ProgramState ()

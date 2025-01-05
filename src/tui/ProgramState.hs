@@ -1,4 +1,7 @@
 
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module ProgramState where
@@ -9,6 +12,7 @@ import Data.Default
 import Control.Lens
 
 import Brick.Forms
+import Brick.Focus
 
 import GameState
 
@@ -65,8 +69,17 @@ instance Default ProgramResources where
                          "[yellowCard10x15Missing]"
                          "[purpleCard10x15Missing]"
 
-data AppFocus = GameInitializationFormPlayerNamesField
-  deriving (Eq, Ord, Show)
+data GameInitializationFormElement = GameInitializationFormPlayerNamesField
+  deriving (Eq, Ord, Show, Enum)
+
+data MainMenuFocusableElement = MainMenuButtons
+                              | GameInitializationForm GameInitializationFormElement
+                              deriving (Eq, Ord, Show)
+
+data AppFocus = MainMenu MainMenuFocusableElement
+                 | OptionsMenu
+                 | Game
+                 deriving (Eq, Ord, Show)
 
 newtype GameInitializationInfo = GameInitializationInfo { _playerNamesField :: T.Text }
   deriving Show
@@ -93,19 +106,25 @@ makeLenses ''GameViewState
 instance Default GameViewState where
   def = GameViewState 0
 
-data Screen = MainMenu | OptionsMenu | Game
-  deriving Show
-
 data ProgramState = ProgramState { _gameState        :: GameState
                                  , _programResources :: ProgramResources
                                  , _mainMenuState    :: MainMenuState
                                  , _gameViewState    :: GameViewState
-                                 , _currentScreen    :: Maybe Screen
+                                 , _currentFocus     :: FocusRing AppFocus
                                  }
 makeLenses ''ProgramState
 
 instance Default ProgramState where
-  def = ProgramState def def def def def
+  def = ProgramState { _gameState        = def
+                     , _programResources = def
+                     , _mainMenuState    = def
+                     , _gameViewState    = def
+                     , _currentFocus     = focusRing [ MainMenu MainMenuButtons
+                                                     , MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
+                                                     , OptionsMenu
+                                                     , Game
+                                                     ]
+                     }
 
 instance GameStated ProgramState where
   getGameState       = _gameState

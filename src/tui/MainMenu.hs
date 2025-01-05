@@ -15,6 +15,8 @@ import Control.Monad.State
 
 import Brick.AttrMap
 import Brick.Forms
+import Brick.Focus ( focusSetCurrent
+                   )
 import qualified Brick.Types as T
 import Brick.Types (Widget
                    , nestEventM
@@ -71,8 +73,8 @@ goBackOrQuit = use (mainMenuState.submenu) >>= \ case
 
 startGame :: [String] -> T.EventM AppFocus ProgramState ()
 startGame playerList = do
-  gameState     <~ liftIO (initialize playerList)
-  currentScreen .= Just Game
+  gameState <~ liftIO (initialize playerList)
+  currentFocus %= focusSetCurrent Game
 
 event :: T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
 event ev = do
@@ -109,9 +111,10 @@ titleWidth ps = length $ head $ lines (ps^.programResources.menuGameTitle)
 
 mkGameInitializationForm :: GameInitializationInfo -> Form GameInitializationInfo e AppFocus
 mkGameInitializationForm =
-    let label s w = padLeft (Pad 1) $ padBottom (Pad 1) $ vLimit 2 (hLimit 20 $ str s <+> fill ' ') <+> w
+    let label s w    = padLeft (Pad 1) $ padBottom (Pad 1) $ vLimit 2 (hLimit 20 $ str s <+> fill ' ') <+> w
+        mMaxNumNames = Just _HABANGA_MAX_PLAYER_COUNT_
     in newForm [ label "Nom des joueurs" @@= B.border
-                                         @@= editTextField playerNamesField GameInitializationFormPlayerNamesField (Just _HABANGA_MAX_PLAYER_COUNT_)
+                                         @@= editTextField playerNamesField (MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)) mMaxNumNames
                ]
 
 gameInitializationSubMenu :: ProgramState -> [Widget AppFocus]

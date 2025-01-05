@@ -14,9 +14,12 @@
 module Game ( initialize
             , winner
             , processPlayerTurnAction
+            , RangeBoundary (..)
             ) where
 
 import qualified Data.List as List
+
+import Debug.Trace
 
 import Control.Monad
 import Control.Monad.Trans.Maybe
@@ -56,9 +59,14 @@ initialize playerNames = do
    du joueur.
 -}
 endPlayerTurn :: (MonadState s m, GameStated s) => m ()
-endPlayerTurn = gameStateLens . players %= cycleAround
-  where cycleAround (p:others) = others ++ [p]
-        cycleAround [] = error "endPlayerTurn: aucun joueur!"
+endPlayerTurn = do
+  let cycleAround (p:others) = others ++ [p]
+      cycleAround [] = error "endPlayerTurn: aucun joueur!"
+      sortByColor  = List.sortBy (\ c0 c1 -> compare (c0^.color) (c1^.color))
+      groupByColor = List.groupBy (\ c0 c1 -> c0^.color == c1^.color)
+      sortByColorThenValues = concat . over traverse List.sort . groupByColor . sortByColor
+  gameStateLens . players . _head . cardsInHand %= sortByColorThenValues
+  gameStateLens . players %= cycleAround
 
 {-| Tire une carte du paquet
 -}

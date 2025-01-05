@@ -25,12 +25,12 @@ import Control.Monad.State
 import Control.Lens
 
 data Color = Red | Yellow | Blue | Purple
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 data Card  = Card { _value :: Int
                   , _color :: Maybe Color
                   }
-                  deriving Eq
+                  deriving (Eq, Ord)
 makeLenses ''Card
 
 instance Default Card where

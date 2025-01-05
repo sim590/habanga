@@ -26,6 +26,7 @@ import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
 import Brick.Widgets.Core ( Padding (Pad)
                           , padBottom
+                          , padLeft
                           , hLimit
                           , vLimit
                           , withAttr
@@ -108,7 +109,7 @@ titleWidth ps = length $ head $ lines (ps^.programResources.menuGameTitle)
 
 mkGameInitializationForm :: GameInitializationInfo -> Form GameInitializationInfo e AppFocus
 mkGameInitializationForm =
-    let label s w = padBottom (Pad 1) $ vLimit 1 (hLimit 15 $ str s <+> fill ' ') <+> w
+    let label s w = padLeft (Pad 1) $ padBottom (Pad 1) $ vLimit 2 (hLimit 20 $ str s <+> fill ' ') <+> w
     in newForm [ label "Nom des joueurs" @@= B.border
                                          @@= editTextField playerNamesField GameInitializationFormPlayerNamesField (Just _HABANGA_MAX_PLAYER_COUNT_)
                ]
@@ -116,9 +117,9 @@ mkGameInitializationForm =
 gameInitializationSubMenu :: ProgramState -> [Widget AppFocus]
 gameInitializationSubMenu ps =
   let
-    submenuWidget = B.borderWithLabel (str "Configuration du jeu") $ hLimit (titleWidth ps + 25) $ vLimit 25 $ vBox contentWidget
+    submenuWidget = B.borderWithLabel (str "Configuration du jeu") $ hLimit (titleWidth ps + 4) $ vLimit 25 $ vBox contentWidget
     contentWidget = [ renderForm ((ps ^. mainMenuState . submenu) ^?! _Just . gameForm)
-                    , C.hCenter $ str "NOTE: Ctrl-g pour valider."
+                    , C.hCenter $ str "Ctrl-g pour valider."
                     ]
   in case ps^.mainMenuState.submenu of
     Just (GameInitialization _) -> [C.centerLayer submenuWidget]

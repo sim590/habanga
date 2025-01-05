@@ -97,7 +97,6 @@ processPlayerTurnAction card side = do
   when (null thePlayers) $ error "processPlayerTurnAction: aucun joueur lors de l'exécution du tour d'un joueur?"
 
   let lastPlayerCardColor      = (^. color) =<< (last thePlayers ^. lastPlayedCard)
-  let currentPlayerName        = head thePlayers ^. name
   let currentPlayerCardsInhand = head thePlayers ^. cardsInHand
 
   guard (card `elem` currentPlayerCardsInhand)
@@ -118,14 +117,13 @@ processPlayerTurnAction card side = do
 
   gameStateLens . cardsOnTable . colorLens card . boundaryLens . value .= card^.value
 
-  boundaries <- use (gameStateLens . cardsOnTable . colorLens card)
+  (Card rangeCard1 _, Card rangeCard2 _) <- use (gameStateLens . cardsOnTable . colorLens card)
 
-  let otherPlayersPredicate p = (p^.name) /= currentPlayerName
-      cardMatchesRange        = flip fits boundaries
-  otherPlayersCards <- use (gameStateLens . players . traverse . filtered otherPlayersPredicate . cardsInHand)
-  (gameStateLens . players . traverse . filtered otherPlayersPredicate . cardsInHand) %= filter (not . cardMatchesRange)
+  let cardMatchesRange c = fits c (card^.color) (rangeCard1, rangeCard2)
+  otherPlayersCards <- use (gameStateLens . players . _tail . traverse . cardsInHand)
+  (gameStateLens . players . _tail . traverse . cardsInHand) %= filter (not . cardMatchesRange)
 
-  let numberOfCardsToDraw = length $ filter cardMatchesRange otherPlayersCards
+  let numberOfCardsToDraw =  length (filter cardMatchesRange otherPlayersCards)
   drawCards numberOfCardsToDraw
   when (lastPlayerCardColor == card^.color) $ drawCards 1
   endPlayerTurn

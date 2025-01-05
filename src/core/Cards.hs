@@ -56,9 +56,8 @@ unshuffledDeck = map (`Card` Just Blue)   [1..18]
    Ceci est réalisé selon la couleur et la valeur de la carte qui doit
    être comprise dans l'intervalle (bornes exclues).
 -}
-fits :: Card -> (Card, Card) -> Bool
-fits (Card v0 col0) (Card v1 col1, Card v2 col2)
-  | col1 /= col2 = error "fits: les couleurs des cartes de l'intervalle en paramètre ne sont pas cohérentes."
+fits :: Card -> Maybe Color -> (Int, Int) -> Bool
+fits (Card v0 col0) col1 (v1, v2)
   | col0 /= col1 = False
   | otherwise    = min v1 v2 < v0 && v0 < max v1 v2
 

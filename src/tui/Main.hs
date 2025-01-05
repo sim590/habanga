@@ -12,10 +12,13 @@ import Control.Monad
 import Control.Lens
 
 import Brick.Util (on)
+import Brick.Focus
+import Brick.Forms
 import Brick.AttrMap
 import Brick.Types ( BrickEvent
                    , EventM
                    , Widget
+                   , CursorLocation
                    )
 import qualified Brick.Main as M
 
@@ -30,11 +33,16 @@ import qualified GameView
 
 import Paths_habanga
 
-appEvent :: BrickEvent () e -> EventM () ProgramState ()
+appEvent :: BrickEvent AppFocus () -> EventM AppFocus ProgramState ()
 appEvent e = use currentScreen >>= \ case
   Just MainMenu -> MainMenu.event e
   Just Game     -> GameView.event e
   _             -> return ()
+
+appChooseCursor :: ProgramState -> [CursorLocation AppFocus] -> Maybe (CursorLocation AppFocus)
+appChooseCursor ps = case ps ^. currentScreen of
+  Just MainMenu -> focusRingCursor formFocus $ (ps ^. mainMenuState . submenu) ^?! _Just . gameForm
+  _             -> const Nothing
 
 attrsMap :: AttrMap
 attrsMap = attrMap defAttr $ [ (attrName "selectedAttr",       V.black   `on` V.white)
@@ -53,15 +61,15 @@ attrsMap = attrMap defAttr $ [ (attrName "selectedAttr",       V.black   `on` V.
                            <> MainMenu.attrs
                            <> GameView.attrs
 
-drawUI :: ProgramState -> [Widget ()]
+drawUI :: ProgramState -> [Widget AppFocus]
 drawUI ps = case ps^.currentScreen of
-  Just MainMenu -> [MainMenu.widget ps]
-  Just Game     -> [GameView.widget ps]
+  Just MainMenu -> MainMenu.widget ps
+  Just Game     -> GameView.widget ps
   s             -> error $ "drawUI: l'écran '" <> show (fromJust s) <> "' n'est pas implanté!"
 
-app :: M.App ProgramState () ()
+app :: M.App ProgramState () AppFocus
 app = M.App { M.appDraw         = drawUI
-            , M.appChooseCursor = M.neverShowCursor
+            , M.appChooseCursor = appChooseCursor
             , M.appHandleEvent  = appEvent
             , M.appStartEvent   = return ()
             , M.appAttrMap      = const attrsMap

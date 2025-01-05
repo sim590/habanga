@@ -46,7 +46,7 @@ colorAttrFromCard c selected
 attrs :: [(AttrName, V.Attr)]
 attrs = [ ]
 
-event :: T.BrickEvent () e -> T.EventM () ProgramState ()
+event :: T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
 event (T.VtyEvent (V.EvKey V.KRight      [] )) = goRight
 event (T.VtyEvent (V.EvKey (V.KChar 'l') [] )) = goRight
 event (T.VtyEvent (V.EvKey V.KLeft       [] )) = goLeft
@@ -54,18 +54,19 @@ event (T.VtyEvent (V.EvKey (V.KChar 'h') [] )) = goLeft
 event (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = currentScreen .= Just MainMenu
 event _                                        = return ()
 
-goLeft :: T.EventM () ProgramState ()
+goLeft :: T.EventM AppFocus ProgramState ()
 goLeft   = gameViewState.gameViewIndex %= max 0 . subtract 1
 
-goRight :: T.EventM () ProgramState ()
+goRight :: T.EventM AppFocus ProgramState ()
 goRight = do
   gs <- use gameState
   gameViewState.gameViewIndex %= min ((+ (-1)) $ length $ head (gs^.players) ^. cardsInHand) . (+ 1)
 
-widget :: ProgramState -> Widget ()
-widget ps = vBox [ C.hCenter $ hBox $ playerCardsButtons currentCardsInHand
-                 , C.center  $ vBox $ map hBox cardsOnTableMatrix
-                 ]
+widget :: ProgramState -> [Widget AppFocus]
+widget ps = [ vBox [ C.hCenter $ hBox $ playerCardsButtons currentCardsInHand
+                   , C.center  $ vBox $ map hBox cardsOnTableMatrix
+                   ]
+            ]
   where
     btn i c            = button (show $ c^.value) i 15 (ps^.gameViewState.gameViewIndex) (colorAttrFromCard c True)
     playerCardsButtons = zipWith (\ i c -> C.hCenter $ withAttr (colorAttrFromCard c False) $ btn i c) [0..]

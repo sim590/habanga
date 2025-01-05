@@ -3,8 +3,12 @@
 
 module ProgramState where
 
+import qualified Data.Text as T
 import Data.Default
+
 import Control.Lens
+
+import Brick.Forms
 
 import GameState
 
@@ -35,7 +39,8 @@ _HABANGA_REDCARD_10X15 = "resources/habanga-tui/habanga-redcard-10x15.txt"
 _HABANGA_BLUECARD_10X15   :: String
 _HABANGA_BLUECARD_10X15 = "resources/habanga-tui/habanga-bluecard-10x15.txt"
 
-
+_HABANGA_MAX_PLAYER_COUNT_ :: Int
+_HABANGA_MAX_PLAYER_COUNT_ = 6
 
 data ProgramResources = ProgramResources { _menuGameTitle   :: String
                                          , _blueCard35x53   :: String
@@ -60,11 +65,27 @@ instance Default ProgramResources where
                          "[yellowCard10x15Missing]"
                          "[purpleCard10x15Missing]"
 
-newtype MainMenuState = MainMenuState { _mainMenuIndex :: Int }
+data AppFocus = GameInitializationFormPlayerNamesField
+  deriving (Eq, Ord, Show)
+
+newtype GameInitializationInfo = GameInitializationInfo { _playerNamesField :: T.Text }
+  deriving Show
+makeLenses ''GameInitializationInfo
+
+instance Default GameInitializationInfo where
+  def = GameInitializationInfo mempty
+
+newtype MainMenuSubMenu = GameInitialization { _gameForm :: Form GameInitializationInfo () AppFocus
+                                             }
+makeLenses ''MainMenuSubMenu
+
+data MainMenuState = MainMenuState { _mainMenuIndex :: Int
+                                   , _submenu       :: Maybe MainMenuSubMenu
+                                   }
 makeLenses ''MainMenuState
 
 instance Default MainMenuState where
-  def = MainMenuState 0
+  def = MainMenuState 0 Nothing
 
 newtype GameViewState = GameViewState { _gameViewIndex :: Int }
 makeLenses ''GameViewState

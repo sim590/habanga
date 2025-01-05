@@ -1,19 +1,36 @@
 
+{-# LANGUAGE LambdaCase #-}
+
 module MainMenu ( event
                 , attrs
                 , widget
                 ) where
 
-import Control.Lens
+import qualified Data.Text as Text
+import Data.Default
+import Data.Maybe
 
+import Control.Lens
+import Control.Monad.State
+
+import Brick ( Padding (Pad)
+             , padBottom
+             , fill
+             , (<+>)
+             )
 import Brick.AttrMap
+import Brick.Forms
 import qualified Brick.Types as T
-import Brick.Types (Widget)
+import Brick.Types (Widget
+                   , nestEventM
+                   , nestEventM'
+                   )
 import qualified Brick.Main as M
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Border.Style as BS
 import qualified Brick.Widgets.Center as C
 import Brick.Widgets.Core ( hLimit
+                          , vLimit
                           , withAttr
                           , withBorderStyle
                           , str
@@ -26,55 +43,110 @@ import qualified Graphics.Vty as V
 import ProgramState
 import Widgets
 
+import Game
 
 attrs :: [(AttrName, V.Attr)]
 attrs = [ ]
 
-goUp :: T.EventM () ProgramState ()
-goUp   = mainMenuState.mainMenuIndex %= max 0 . subtract 1
+goUp :: T.EventM AppFocus ProgramState ()
+goUp = use (mainMenuState . submenu) >>= \ case
+   Just (GameInitialization _) -> return ()
+   _                           -> mainMenuState.mainMenuIndex %= max 0 . subtract 1
 
-goDown :: T.EventM () ProgramState ()
-goDown = mainMenuState.mainMenuIndex %= min (length buttons - 1) . (+ 1)
+goDown :: T.EventM AppFocus ProgramState ()
+goDown = use (mainMenuState . submenu) >>= \ case
+   Just (GameInitialization _) -> return ()
+   _                           -> mainMenuState.mainMenuIndex %= min (length buttons - 1) . (+ 1)
 
-event :: T.BrickEvent () e -> T.EventM () ProgramState ()
-event (T.VtyEvent (V.EvKey V.KDown       [] )) = goDown
-event (T.VtyEvent (V.EvKey (V.KChar 'j') [] )) = goDown
-event (T.VtyEvent (V.EvKey V.KUp         [] )) = goUp
-event (T.VtyEvent (V.EvKey (V.KChar 'k') [] )) = goUp
-event (T.VtyEvent (V.EvKey V.KEsc        [] )) = M.halt
-event (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = M.halt
-event _                                        = return ()
+selectEntry :: T.EventM AppFocus ProgramState ()
+selectEntry = do
+  i <- use $ mainMenuState.mainMenuIndex
+  let maction = over traverse snd buttons ^? ix i
+  fromMaybe (return ()) maction
 
-buttons :: [Int -> Int -> Int -> AttrName -> Widget n]
-buttons = [ button "Jouer"
-          , button "Options"
-          , button "Quitter"
+goBackOrQuit :: T.EventM AppFocus ProgramState ()
+goBackOrQuit = use (mainMenuState.submenu) >>= \ case
+  Just (GameInitialization _) -> mainMenuState.submenu .= Nothing
+  _                           -> M.halt
+
+startGame :: [String] -> T.EventM AppFocus ProgramState ()
+startGame playerList = do
+  gameState     <~ liftIO (initialize playerList)
+  currentScreen .= Just Game
+
+event :: T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
+event ev = do
+  let
+    mainEvents (T.VtyEvent (V.EvKey V.KEnter      [])) = selectEntry
+    mainEvents (T.VtyEvent (V.EvKey V.KDown       [])) = goDown
+    mainEvents (T.VtyEvent (V.EvKey (V.KChar 'j') [])) = goDown
+    mainEvents (T.VtyEvent (V.EvKey V.KUp         [])) = goUp
+    mainEvents (T.VtyEvent (V.EvKey (V.KChar 'k') [])) = goUp
+    mainEvents (T.VtyEvent (V.EvKey V.KEsc        [])) = goBackOrQuit
+    mainEvents (T.VtyEvent (V.EvKey (V.KChar 'q') [])) = goBackOrQuit
+    mainEvents _                                       = return ()
+  use (mainMenuState.submenu) >>= \ case
+    Just (GameInitialization f) -> case ev of
+      (T.VtyEvent (V.EvKey V.KEsc []))               -> goBackOrQuit
+      (T.VtyEvent (V.EvKey (V.KChar 'g') [V.MCtrl])) -> do
+        (_, gameInfo) <- nestEventM f $ gets formState
+        mainMenuState.submenu .= Nothing
+        let playerNames = filter (not . null) $ map (Text.unpack . Text.strip) $ Text.lines $ gameInfo ^. playerNamesField
+        unless (null playerNames) $ startGame playerNames
+      _                                         -> do
+        f' <- nestEventM' f (handleFormEvent ev)
+        mainMenuState . submenu . _Just . gameForm .= f'
+    _ -> mainEvents ev
+
+buttons :: [(Int -> Int -> Int -> AttrName -> Widget AppFocus, T.EventM AppFocus ProgramState ())]
+buttons = [ (button "Jouer",   mainMenuState.submenu .= Just (GameInitialization (mkGameInitializationForm def)))
+          , (button "Options", return ()                                                                        )
+          , (button "Quitter", M.halt                                                                           )
           ]
 
-widget :: ProgramState -> Widget ()
-widget ps = hBox [ leftPanel
-                 , hLimit titleWidth middlePanel
-                 , rightPanel
-                 ]
-  where sidePanelStyle a = C.center . withBorderStyle BS.unicodeRounded . B.border . withAttr (attrName a) . str
-        leftPanel        = sidePanelStyle "bluecard"   $ ps^.programResources.blueCard35x53
-        rightPanel       = sidePanelStyle "purplecard" $ ps^.programResources.purpleCard35x53
+titleWidth :: ProgramState -> Int
+titleWidth ps = length $ head $ lines (ps^.programResources.menuGameTitle)
 
-        middlePanel      = vBox [ C.hCenter $ str $ ps^.programResources.menuGameTitle
-                                , C.hCenter $ B.border $ hLimit titleWidth $ C.center menuPanel
-                                ]
-        menuPanel        = vBox [ C.hCenter $ str "Menu principal"
-                                , C.center menuOptions
-                                ]
-        menuOptions      = vBox $ map C.center $ appendArgsToButtons buttons 25
+mkGameInitializationForm :: GameInitializationInfo -> Form GameInitializationInfo e AppFocus
+mkGameInitializationForm =
+    let label s w = padBottom (Pad 1) $ vLimit 1 (hLimit 15 $ str s <+> fill ' ') <+> w
+    in newForm [ label "Nom des joueurs" @@= B.border
+                                         @@= editTextField playerNamesField GameInitializationFormPlayerNamesField (Just _HABANGA_MAX_PLAYER_COUNT_)
+               ]
 
-        titleWidth       = length $ head $ lines (ps^.programResources.menuGameTitle)
+gameInitializationSubMenu :: ProgramState -> [Widget AppFocus]
+gameInitializationSubMenu ps =
+  let
+    submenuWidget = B.borderWithLabel (str "Configuration du jeu") $ hLimit (titleWidth ps + 25) $ vLimit 25 $ vBox contentWidget
+    contentWidget = [ renderForm ((ps ^. mainMenuState . submenu) ^?! _Just . gameForm)
+                    , C.hCenter $ str "NOTE: Ctrl-g pour valider."
+                    ]
+  in case ps^.mainMenuState.submenu of
+    Just (GameInitialization _) -> [C.centerLayer submenuWidget]
+    _                           -> []
 
-        -- Cette fonction est un peu moins évidente, mais elle assure que les
-        -- indices des boutons sont bien attribués et que la largeur de ceux-ci
-        -- est la même pour tous.
-        appendArgsToButtons bs width = fst (foldl (\ (l, i) f -> (l++[f i], i+1)) ([], 0) bs) <*> [width]
-                                                                                              <*> [ps^.mainMenuState.mainMenuIndex] <*> [attrName "selectedAttr"]
+widget :: ProgramState -> [Widget AppFocus]
+widget ps = subMenus <> [ hBox [ leftPanel
+                               , hLimit (titleWidth ps) middlePanel
+                               , rightPanel
+                               ]
+                        ]
+  where
+    subMenus         = gameInitializationSubMenu ps
+    sidePanelStyle a = C.center . withBorderStyle BS.unicodeRounded . B.border . withAttr (attrName a) . str
+    leftPanel        = sidePanelStyle "bluecard"   $ ps^.programResources.blueCard35x53
+    rightPanel       = sidePanelStyle "purplecard" $ ps^.programResources.purpleCard35x53
+
+    middlePanel      = vBox [ C.hCenter $ str $ ps^.programResources.menuGameTitle
+                            , C.hCenter $ B.borderWithLabel (str "Menu principal") $ hLimit (titleWidth ps) $ C.center menuOptions
+                            ]
+    menuOptions      = vBox $ map C.center $ appendArgsToButtons (over traverse fst buttons) 25
+    -- Cette fonction est un peu moins évidente, mais elle assure que les
+    -- indices des boutons sont bien attribués et que la largeur de ceux-ci
+    -- est la même pour tous.
+    appendArgsToButtons bs width = fst (foldl (\ (l, i) f -> (l++[f i], i+1)) ([], 0) bs) <*> [width]
+                                                                                          <*> [ps^.mainMenuState.mainMenuIndex]
+                                                                                          <*> [attrName "selectedAttr"]
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

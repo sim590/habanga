@@ -1,4 +1,13 @@
 
+{-|
+  Module      : GameView
+  Description : Interface texte de l'écran de jeu
+  Copyright   : (c) Simon Désaulniers, 2025
+  License     : GPL-3
+
+  Maintainer  : sim.desaulniers@gmail.com
+-}
+
 {-# LANGUAGE LambdaCase #-}
 
 module GameView ( event

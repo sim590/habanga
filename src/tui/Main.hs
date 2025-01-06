@@ -1,4 +1,13 @@
 
+{-|
+  Module      : Main
+  Description : Point d'entrée de l'interface texte du jeu
+  Copyright   : (c) Simon Désaulniers, 2025
+  License     : GPL-3
+
+  Maintainer  : sim.desaulniers@gmail.com
+-}
+
 module Main where
 
 import Data.Maybe

@@ -1,4 +1,13 @@
 
+{-|
+  Module      : ProgramState
+  Description : Définitions de l'état de l'interface texte
+  Copyright   : (c) Simon Désaulniers, 2025
+  License     : GPL-3
+
+  Maintainer  : sim.desaulniers@gmail.com
+-}
+
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveDataTypeable #-}

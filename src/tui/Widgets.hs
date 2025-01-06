@@ -1,4 +1,13 @@
 
+{-|
+  Module      : Widgets
+  Description : Bouts de code réutilisables de l'interface texte
+  Copyright   : (c) Simon Désaulniers, 2025
+  License     : GPL-3
+
+  Maintainer  : sim.desaulniers@gmail.com
+-}
+
 module Widgets ( button
                , buttonAttrs
                ) where

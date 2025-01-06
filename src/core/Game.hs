@@ -19,8 +19,6 @@ module Game ( initialize
 
 import qualified Data.List as List
 
-import Debug.Trace
-
 import Control.Monad
 import Control.Monad.Trans.Maybe
 import Control.Monad.State

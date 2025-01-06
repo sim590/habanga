@@ -11,16 +11,13 @@
   des mécanismes de jeu devrait être écrit sous ce module.
 -}
 
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+module Game ( initialize
+            , winner
+            , processPlayerTurnAction
+            , RangeBoundary (..)
+            ) where
 
-module Game where
-
-import System.Random
-
-import Data.Int
-import Data.List
-import Data.Maybe
+import qualified Data.List as List
 
 import Control.Monad
 import Control.Monad.Trans.Maybe
@@ -28,49 +25,9 @@ import Control.Monad.State
 import Control.Lens
 
 import Cards
+import GameState
 
 data RangeBoundary = LeftBoundary | RightBoundary
-
-data CardsOnTable = CardsOnTable { _red    :: (Card, Card)
-                                 , _yellow :: (Card, Card)
-                                 , _blue   :: (Card, Card)
-                                 , _purple :: (Card, Card)
-                                 }
-makeLenses ''CardsOnTable
-
-data PlayerState = PlayerState { _name           :: String
-                               , _cardsInHand    :: [Card]
-                               , _lastPlayedCard :: Maybe Card
-                               }
-makeLenses ''PlayerState
-
-instance Show PlayerState where
-  show p = (p^.name) ++ ": " ++ show (p^.cardsInHand)
-
-data GameState = GameState { _cardsOnTable :: CardsOnTable
-                           , _deck         :: [Card]
-                           , _players      :: [PlayerState]
-                           }
-makeLenses ''GameState
-
-
-instance Show CardsOnTable where
-  show cs = intercalate "\n" [ "Red: "    ++ "\n\t" ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)
-                             , "Yellow: " ++ "\n\t" ++ show (cs^.yellow._1.value) ++ ", " ++ show (cs^.yellow._2.value)
-                             , "Blue: "   ++ "\n\t" ++ show (cs^.blue._1.value)   ++ ", " ++ show (cs^.blue._2.value)
-                             , "Purple: " ++ "\n\t" ++ show (cs^.purple._1.value) ++ ", " ++ show (cs^.purple._2.value)
-                             ]
-
-instance Show GameState where
-  show gs = intercalate "\n" [ "Deck: "      ++ "\n" ++ "\t" ++ show (gs^.deck)
-                             , "Players: "
-                             ]
-         ++ "\n"
-         ++ intercalate "\n" (map (("\t"++) . show) (gs^.players))
-         ++ "\n"
-         ++ intercalate "\n" [ "Cards on table:"
-                             , intercalate "\n" $ map ("\t"++) (lines (show $ gs^.cardsOnTable))
-                             ]
 
 {-| Fait l'initialisation de l'état du jeu.
 
@@ -83,7 +40,6 @@ initialize
   :: [String] -- ^ Les noms des différents joueurs.
   -> IO GameState
 initialize playerNames = do
-  seed <- (randomIO :: IO Int64)
   startingRangesCardsShuffled <- shuffleCards startingRangesCardList
   let theCardsOnTable     = CardsOnTable (startingRangesCardsShuffled !! 0, startingRangesCardsShuffled !! 1)
                                          (startingRangesCardsShuffled !! 2, startingRangesCardsShuffled !! 3)
@@ -100,19 +56,36 @@ initialize playerNames = do
 {-| Exécute toute les actions nécessaires lors de la terminaison du tour
    du joueur.
 -}
-endPlayerTurn :: Monad m => StateT GameState m ()
-endPlayerTurn = players %= \ (p:others) -> others ++ [p]
+endPlayerTurn :: (MonadState s m, GameStated s) => m ()
+endPlayerTurn = do
+  let cycleAround (p:others) = others ++ [p]
+      cycleAround [] = error "endPlayerTurn: aucun joueur!"
+      sortByColor  = List.sortBy (\ c0 c1 -> compare (c0^.color) (c1^.color))
+      groupByColor = List.groupBy (\ c0 c1 -> c0^.color == c1^.color)
+      sortByColorThenValues = concat . over traverse List.sort . groupByColor . sortByColor
+  gameStateLens . players . _head . cardsInHand %= sortByColorThenValues
+  gameStateLens . players %= cycleAround
 
 {-| Tire une carte du paquet
 -}
 drawCards
-  :: Monad m
+  :: (MonadState s m, GameStated s)
   => Int -- ^ Le nombre de cartes à tirer du paquet.
-  -> StateT GameState m ()
+  -> m ()
 drawCards n = do
-  deckCards <- use deck
-  (players . _head . cardsInHand) %= (++ take n deckCards)
-  deck %= drop n
+  deckCards <- use $ gameStateLens . deck
+  (gameStateLens . players . _head . cardsInHand) %= (++ take n deckCards)
+  gameStateLens . deck %= drop n
+
+{-| Retourne le gagnant de la partie.
+
+   Si l'état courant du jeu admet un gagnant, celui-ci est retourné. Autrement,
+   "rien" (Nothing) n'est retourné.
+-}
+winner :: (MonadState s m, GameStated s) => m (Maybe PlayerState)
+winner = do
+  thePlayers <- use $ gameStateLens . players
+  return $ List.find (\ p -> null (p^.cardsInHand)) thePlayers
 
 {-| Effectue les actions associées au tour d'un joueur.
 
@@ -120,49 +93,46 @@ drawCards n = do
    cartes en relation à l'interval nouvellement créé par le joueur.
 -}
 processPlayerTurnAction
-  :: Monad m
+  :: (MonadState s m, GameStated s)
   => Card          -- ^ La carte jouée par le joueur.
   -> RangeBoundary -- ^ Le côté où placer la carte du joueur (gauche/droite) selon la couleur de
                    --   celle-ci.
-  -> MaybeT (StateT GameState m) ()
+  -> MaybeT m ()
 processPlayerTurnAction card side = do
-  thePlayers <- use players
+  thePlayers <- use $ gameStateLens . players
   when (null thePlayers) $ error "processPlayerTurnAction: aucun joueur lors de l'exécution du tour d'un joueur?"
 
   let lastPlayerCardColor      = (^. color) =<< (last thePlayers ^. lastPlayedCard)
-  let currentPlayerName        = head thePlayers ^. name
   let currentPlayerCardsInhand = head thePlayers ^. cardsInHand
 
   guard (card `elem` currentPlayerCardsInhand)
 
-  (players . _head . cardsInHand) %= delete card
+  (gameStateLens . players . _head . cardsInHand) %= List.delete card
 
   let boundaryLens = case side of
                        LeftBoundary  -> _1
                        RightBoundary -> _2
 
-  let colorLens card = case card^.color of
-                         Just Red    -> red
-                         Just Yellow -> yellow
-                         Just Blue   -> blue
-                         Just Purple -> purple
-                         Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
+  let colorLens c = case c^.color of
+                      Just Red    -> red
+                      Just Yellow -> yellow
+                      Just Blue   -> blue
+                      Just Purple -> purple
+                      Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
 
 
-  cardsOnTable . colorLens card . boundaryLens . value .= card^.value
+  gameStateLens . cardsOnTable . colorLens card . boundaryLens . value .= card^.value
 
-  boundaries@(leftBoundary, rightBoundary) <- use (cardsOnTable . colorLens card)
+  (Card rangeCard1 _, Card rangeCard2 _) <- use (gameStateLens . cardsOnTable . colorLens card)
 
-  let otherPlayersPredicate p = (p^.name) /= currentPlayerName
-      cardMatchesRange        = flip fits boundaries
-  otherPlayersCards <- use (players . traverse . filtered otherPlayersPredicate . cardsInHand)
-  (players . traverse . filtered otherPlayersPredicate . cardsInHand) %= filter (not . cardMatchesRange)
+  let cardMatchesRange c = fits c (card^.color) (rangeCard1, rangeCard2)
+  otherPlayersCards <- use (gameStateLens . players . _tail . traverse . cardsInHand)
+  (gameStateLens . players . _tail . traverse . cardsInHand) %= filter (not . cardMatchesRange)
 
-  let numberOfCardsToDraw = length $ filter cardMatchesRange otherPlayersCards
-  lift $ do
-    drawCards numberOfCardsToDraw
-    when (lastPlayerCardColor == card^.color) $ drawCards 1
-    endPlayerTurn
+  let numberOfCardsToDraw =  length (filter cardMatchesRange otherPlayersCards)
+  drawCards numberOfCardsToDraw
+  when (lastPlayerCardColor == card^.color) $ drawCards 1
+  endPlayerTurn
 
 -- vim: set sts=2 ts=2 sw=2 tw=120 et :
 

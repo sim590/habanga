@@ -1,9 +1,9 @@
-cabal-version:       2.4
-name:                habanga
-version:             0.1.0.0
+cabal-version: 2.4
+name:          habanga
+version:       0.1.0.0
 
 -- A short (one-line) description of the package.
-synopsis:            Le jeu Cabanga implanté en Haskell
+synopsis:      Le jeu Cabanga implanté en Haskell
 
 -- A longer description of the package.
 -- description:
@@ -13,29 +13,61 @@ synopsis:            Le jeu Cabanga implanté en Haskell
 
 -- The license under which the package is released.
 -- license:
-author:              Simon Désaulniers
-maintainer:          sim.desaulniers@gmail.com
-license:             GPL-3.0-or-later
+author:        Simon Désaulniers
+maintainer:    sim.desaulniers@gmail.com
+license:       GPL-3.0-or-later
 
 -- A copyright notice.
 -- copyright:
 -- category:
-extra-source-files:  CHANGELOG.md
+data-files:    
+               resources/habanga-tui/habanga-bluecard-10x15.txt
+               resources/habanga-tui/habanga-bluecard-35x53.txt
+               resources/habanga-tui/habanga-purplecard-10x15.txt
+               resources/habanga-tui/habanga-purplecard-35x53.txt
+               resources/habanga-tui/habanga-redcard-10x15.txt
+               resources/habanga-tui/habanga-redcard-35x53.txt
+               resources/habanga-tui/Habanga-title.txt
+               resources/habanga-tui/habanga-yellowcard-10x15.txt
+               resources/habanga-tui/habanga-yellowcard-35x53.txt
+
+common common-lang
+    default-language:   Haskell2010
+    ghc-options:        -Wall -Wcompat -Wincomplete-record-updates
+                        -Wincomplete-uni-patterns -Wredundant-constraints
+
+common common-base
+    build-depends:      base ^>=4.17.2.1,
+                        transformers,
+                        lens,
+                        mtl,
+                        data-default
 
 library habanga-core
-    exposed-modules:  Game
-                      Cards
+    import:             common-base,
+                        common-lang
+    exposed-modules:    Game
+                        Cards
+                        GameState
+    build-depends:      random
+    hs-source-dirs:     src/core
 
-    -- Modules included in this executable, other than Main.
-    -- other-modules:
+executable habanga-tui
+    import:             common-base,
+                        common-lang
+    main-is:            Main.hs
+    other-modules:      ProgramState,
+                        MainMenu,
+                        GameView,
+                        Widgets
+                        Paths_habanga
+    autogen-modules:    Paths_habanga
+    build-depends:      habanga-core,
+                        containers,
+                        text,
+                        brick,
+                        vty >=6.0,
+                        vty-crossplatform
+    hs-source-dirs:     src/tui
+    ghc-options:        -threaded
 
-    -- LANGUAGE extensions used by modules in this package.
-    -- other-extensions:
-    build-depends:    base ^>=4.17.2.1,
-                      lens,
-                      mtl,
-                      transformers,
-                      random
-
-    hs-source-dirs:   src/core
-    default-language: Haskell2010

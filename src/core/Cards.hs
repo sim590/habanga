@@ -19,17 +19,22 @@ module Cards where
 
 import System.Random
 
+import Data.Default
+
 import Control.Monad.State
 import Control.Lens
 
 data Color = Red | Yellow | Blue | Purple
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 data Card  = Card { _value :: Int
                   , _color :: Maybe Color
                   }
-                  deriving Eq
+                  deriving (Eq, Ord)
 makeLenses ''Card
+
+instance Default Card where
+  def = Card 0 Nothing
 
 instance Show Card where
   show card = colorString ++ "(" ++ show (card^.value) ++ ")"
@@ -42,7 +47,7 @@ startingRangesCardList = map (`Card` Nothing) [1, 3, 5, 7, 12, 14, 16, 18]
 unshuffledDeck :: [Card]
 unshuffledDeck = map (`Card` Just Blue)   [1..18]
               ++ map (`Card` Just Yellow) [1..18]
-              ++ map (`Card` Just Blue)   [1..18]
+              ++ map (`Card` Just Red)    [1..18]
               ++ map (`Card` Just Purple) [1..18]
 
 {-| Détermine si une carte peut s'insérer ou non dans un intervalle
@@ -51,20 +56,21 @@ unshuffledDeck = map (`Card` Just Blue)   [1..18]
    Ceci est réalisé selon la couleur et la valeur de la carte qui doit
    être comprise dans l'intervalle (bornes exclues).
 -}
-fits :: Card -> (Card, Card) -> Bool
-fits (Card v0 col0) (Card v1 col1, Card v2 col2)
-  | col1 /= col2 = error "fits: les couleurs des cartes de l'intervalle en paramètre ne sont pas cohérentes."
+fits :: Card -> Maybe Color -> (Int, Int) -> Bool
+fits (Card v0 col0) col1 (v1, v2)
   | col0 /= col1 = False
   | otherwise    = min v1 v2 < v0 && v0 < max v1 v2
 
 shuffleCards :: [Card] -> IO [Card]
-shuffleCards cards = flip evalStateT cards $ forM [1..length cards] $ \ _ -> do
+shuffleCards cards = flip evalStateT cards $ replicateM (length cards) $ do
   l <- get
   s <- randomIO
-  let r            = s `mod` length l
-      (beg, c:end) = splitAt r l
-  put (beg ++ end)
-  return c
+  let r = s `mod` length l
+  case splitAt r l of
+    (beg, c:end) -> do
+      put (beg ++ end)
+      return c
+    (_, []) -> error "shuffleCards: la liste était vide. Ceci n'aurait pas dû se produire..."
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

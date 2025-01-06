@@ -1,8 +1,10 @@
 
 cradle:
   cabal:
-    - path: "src"
+    - path: "src/core"
       component: "habanga-core"
+    - path: "src/tui"
+      component: "habanga-tui"
 
 #  vim: set sts=2 ts=4 sw=2 tw=80 et :
 

@@ -2,25 +2,30 @@ cabal-version: 2.4
 name:          habanga
 version:       0.1.0.0
 
--- A short (one-line) description of the package.
 synopsis:      Le jeu Cabanga implanté en Haskell
 
--- A longer description of the package.
--- description:
+category: game
 
--- A URL where users can report bugs.
--- bug-reports:
+description:   Habanga est une implantation en Haskell du jeu de société
+               Cabanga. Le paquet fournit pour le moment une interface texte de
+               base.
 
--- The license under which the package is released.
--- license:
+               Le jeu ne peut présentement fonctionner seulement qu'avec des
+               joueurs utilisant le même processus, mais sera jouable en
+               multijoueur dans le futur lorsque le mode en ligne sera implanté.
+
+               Évidemment, une interface graphique sera aussi écrite dans le
+               futur pour une meilleure expérience.
+
 author:        Simon Désaulniers
 maintainer:    sim.desaulniers@gmail.com
 license:       GPL-3.0-or-later
 
--- A copyright notice.
--- copyright:
--- category:
-data-files:    
+source-repository head
+  type: git
+  location: https://github.com/sim590/habanga/
+
+data-files:
                resources/habanga-tui/habanga-bluecard-10x15.txt
                resources/habanga-tui/habanga-bluecard-35x53.txt
                resources/habanga-tui/habanga-purplecard-10x15.txt
@@ -38,10 +43,10 @@ common common-lang
 
 common common-base
     build-depends:      base ^>=4.17.2.1,
-                        transformers,
-                        lens,
-                        mtl,
-                        data-default
+                        transformers >= 0.5.6 && < 0.6,
+                        lens >= 5.3.3 && < 5.4,
+                        mtl >= 2.2.2 && < 2.3,
+                        data-default >= 0.8.0 && < 0.9
 
 library habanga-core
     import:             common-base,
@@ -49,7 +54,7 @@ library habanga-core
     exposed-modules:    Game
                         Cards
                         GameState
-    build-depends:      random
+    build-depends:      random >= 1.2.1 && < 1.3
     hs-source-dirs:     src/core
 
 executable habanga-tui
@@ -63,11 +68,11 @@ executable habanga-tui
                         Paths_habanga
     autogen-modules:    Paths_habanga
     build-depends:      habanga-core,
-                        containers,
-                        text,
-                        brick,
-                        vty >=6.0,
-                        vty-crossplatform
+                        containers >= 0.6.7 && < 0.7,
+                        text >= 2.0.2 && < 2.1,
+                        brick >= 2.6 && < 2.7,
+                        vty >= 6.2 && < 6.3,
+                        vty-crossplatform >= 0.4.0 && < 0.5
     hs-source-dirs:     src/tui
     ghc-options:        -threaded
 

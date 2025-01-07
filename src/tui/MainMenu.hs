@@ -60,14 +60,10 @@ attrs :: [(AttrName, V.Attr)]
 attrs = [ ]
 
 goUp :: T.EventM AppFocus ProgramState ()
-goUp = use (mainMenuState . submenu) >>= \ case
-   Just (GameInitialization _) -> return ()
-   _                           -> mainMenuState.mainMenuIndex %= max 0 . subtract 1
+goUp = mainMenuState.mainMenuIndex %= max 0 . subtract 1
 
 goDown :: T.EventM AppFocus ProgramState ()
-goDown = use (mainMenuState . submenu) >>= \ case
-   Just (GameInitialization _) -> return ()
-   _                           -> mainMenuState.mainMenuIndex %= min (length buttons - 1) . (+ 1)
+goDown = mainMenuState.mainMenuIndex %= min (length buttons - 1) . (+ 1)
 
 selectEntry :: T.EventM AppFocus ProgramState ()
 selectEntry = do

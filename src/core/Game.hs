@@ -121,7 +121,7 @@ processPlayerTurnAction card side = do
                       Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
 
 
-  gameStateLens . cardsOnTable . colorLens card . boundaryLens . value .= card^.value
+  gameStateLens . cardsOnTable . colorLens card . boundaryLens .= card
 
   (Card rangeCard1 _, Card rangeCard2 _) <- use (gameStateLens . cardsOnTable . colorLens card)
 

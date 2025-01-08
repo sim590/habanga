@@ -91,13 +91,15 @@ winner = do
 
    Le joueur joue sa carte, doit piger lorsque d'autres joueurs ont des
    cartes en relation à l'interval nouvellement créé par le joueur.
+
+   La fonction retourne le nombre de cartes pigées par le joueur à la fin de son tour.
 -}
 processPlayerTurnAction
   :: (MonadState s m, GameStated s)
   => Card          -- ^ La carte jouée par le joueur.
   -> RangeBoundary -- ^ Le côté où placer la carte du joueur (gauche/droite) selon la couleur de
                    --   celle-ci.
-  -> MaybeT m ()
+  -> MaybeT m Int
 processPlayerTurnAction card side = do
   thePlayers <- use $ gameStateLens . players
   when (null thePlayers) $ error "processPlayerTurnAction: aucun joueur lors de l'exécution du tour d'un joueur?"
@@ -131,8 +133,12 @@ processPlayerTurnAction card side = do
 
   let numberOfCardsToDraw =  length (filter cardMatchesRange otherPlayersCards)
   drawCards numberOfCardsToDraw
-  when (lastPlayerCardColor == card^.color) $ drawCards 1
-  endPlayerTurn
+  if lastPlayerCardColor == card^.color then do
+    drawCards 1
+    return $ numberOfCardsToDraw + 1
+  else do
+    endPlayerTurn
+    return numberOfCardsToDraw
 
 -- vim: set sts=2 ts=2 sw=2 tw=120 et :
 

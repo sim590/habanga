@@ -79,7 +79,7 @@ goBackOrQuit = use (mainMenuState.submenu) >>= \ case
 startGame :: [String] -> T.EventM AppFocus ProgramState ()
 startGame playerList = do
   gameState <~ liftIO (initialize playerList)
-  currentFocus %= focusSetCurrent Game
+  currentFocus %= focusSetCurrent (Game Nothing)
 
 event :: T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
 event ev = do

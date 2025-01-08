@@ -85,9 +85,12 @@ data MainMenuFocusableElement = MainMenuButtons
                               | GameInitializationForm GameInitializationFormElement
                               deriving (Eq, Ord, Show)
 
+data GameFocusableSubElement = GameLog
+  deriving (Eq, Ord, Show)
+
 data AppFocus = MainMenu MainMenuFocusableElement
                  | OptionsMenu
-                 | Game
+                 | Game (Maybe GameFocusableSubElement)
                  deriving (Eq, Ord, Show)
 
 newtype GameInitializationInfo = GameInitializationInfo { _playerNamesField :: T.Text }
@@ -111,11 +114,12 @@ instance Default MainMenuState where
 
 data GameViewState = GameViewState { _gameViewIndex :: Int
                                    , _winner        :: Maybe String
+                                   , _gameLog       :: [String]
                                    }
 makeLenses ''GameViewState
 
 instance Default GameViewState where
-  def = GameViewState 0 Nothing
+  def = GameViewState 0 Nothing []
 
 data ProgramState = ProgramState { _gameState        :: GameState
                                  , _programResources :: ProgramResources
@@ -133,7 +137,7 @@ instance Default ProgramState where
                      , _currentFocus     = focusRing [ MainMenu MainMenuButtons
                                                      , MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
                                                      , OptionsMenu
-                                                     , Game
+                                                     , Game Nothing
                                                      ]
                      }
 

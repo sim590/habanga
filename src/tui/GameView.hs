@@ -15,6 +15,9 @@ module GameView ( event
                 , widget
                 ) where
 
+import qualified Data.Text as Text
+import qualified Data.List as List
+
 import Control.Lens
 import Control.Monad.Trans.Maybe
 
@@ -26,6 +29,8 @@ import Brick.Types (Widget)
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
 import Brick.Widgets.Core ( Padding (Pad)
+                          , viewport
+                          , translateBy
                           , padLeft
                           , hLimit
                           , vLimit
@@ -74,7 +79,8 @@ goRight = do
 
 goBackOrQuit :: T.EventM AppFocus ProgramState ()
 goBackOrQuit = do
-  gameViewState . winner .= Nothing
+  gameViewState . winner  .= Nothing
+  gameViewState . gameLog .= []
   currentFocus %= focusSetCurrent (MainMenu MainMenuButtons)
 
 playCard :: Game.RangeBoundary -> T.EventM AppFocus ProgramState ()
@@ -82,8 +88,19 @@ playCard rb = do
   cardIdx    <- use (gameViewState . gameViewIndex)
   thePlayers <- use (gameState . players)
   let currentPlayer = head thePlayers
-  -- TODO: faire de quoi avec le retour Maybe
-  _ <- runMaybeT $ Game.processPlayerTurnAction ((currentPlayer^.cardsInHand) !! cardIdx) rb
+      card          = (currentPlayer^.cardsInHand) !! cardIdx
+      cardColorStr  = Text.unpack $ Text.toLower $ Text.pack $ maybe "gris" show (card^.color)
+
+  cardsDrawn <- runMaybeT $ Game.processPlayerTurnAction card rb
+
+  let
+    cardsDrawnLog = [">> " <> "pige " <> show (cardsDrawn^?!_Just) <> " carte(s)!" | ((>0) <$> cardsDrawn) == Just True]
+    playerLog     = List.intercalate "\n" $ [ "Joueur " <> currentPlayer^.name <> ": "
+                                            , ">> "     <> "a joué le " <> show (card^.value) <> " " <> cardColorStr <> "."
+                                            ] <> cardsDrawnLog
+                                              <> ["\n"]
+  gameViewState . gameLog %= (:) playerLog
+
   theWinner <- Game.winner
   gameViewState . winner .= ((^.name) <$> theWinner)
 
@@ -118,14 +135,19 @@ winnerDialog ps =
 
 
 widget :: ProgramState -> [Widget AppFocus]
-widget ps = winnerDialog ps <> gameUI
+widget ps = winnerDialog ps <> [gameLogWidget] <> gameUI
   where
     gameUI             = [ vBox [ C.hCenter $ str $ "Joueur: " <> currentPlayer ^. name
                                 , C.hCenter $ hBox $ playerCardsButtons currentCardsInHand
-                                , C.center  $ vBox $ map hBox cardsOnTableMatrix
+                                , C.center (vBox $ map hBox cardsOnTableMatrix)
                                 , C.hCenter $ B.borderWithLabel (str "Touches") $ vLimit (length keyBindText) keybindBox
                                 ]
                          ]
+    gameLogTextWidget  = vBox $ map str $ ps^.gameViewState.gameLog
+    gameLogWidget      = translateBy (T.Location (1, 10)) $ B.borderWithLabel (str "Journal du jeu")
+                                                          $ vLimit 15
+                                                          $ hLimit 30
+                                                          $ viewport (Game (Just GameLog)) T.Vertical gameLogTextWidget
     keybindBox         =  vBox $ over traverse (hLimit 50 . hBox)
                                $ over (traverse.ix 0) (\ w ->  padLeft (Pad 2) w <+> fill ' ')
                                $ over (traverse.ix 1) (\ w -> w <+> fill ' ')

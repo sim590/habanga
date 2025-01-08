@@ -43,7 +43,7 @@ import Paths_habanga
 appEvent :: BrickEvent AppFocus () -> EventM AppFocus ProgramState ()
 appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
   Just (MainMenu _) -> MainMenu.event e
-  Just Game         -> GameView.event e
+  Just (Game     _) -> GameView.event e
   _                 -> return ()
 
 appChooseCursor :: ProgramState -> [CursorLocation AppFocus] -> Maybe (CursorLocation AppFocus)
@@ -71,7 +71,7 @@ attrsMap = attrMap defAttr $ [ (attrName "selectedAttr",       V.black   `on` V.
 drawUI :: ProgramState -> [Widget AppFocus]
 drawUI ps = case focusGetCurrent (ps^.currentFocus) of
   Just (MainMenu _) -> MainMenu.widget ps
-  Just Game         -> GameView.widget ps
+  Just (Game     _) -> GameView.widget ps
   s                 -> error $ "drawUI: l'écran '" <> show (fromJust s) <> "' n'est pas implanté!"
 
 app :: M.App ProgramState () AppFocus

@@ -2,17 +2,18 @@ cabal-version: 2.4
 name:          habanga
 version:       0.1.0.0
 
-synopsis:      Le jeu Cabanga implanté en Haskell
+synopsis:      Le jeu Cabanga implémenté en Haskell
 
 category: game
 
-description:   Habanga est une implantation en Haskell du jeu de société
+description:   Habanga est une implémentation en Haskell du jeu de société
                Cabanga. Le paquet fournit pour le moment une interface texte de
                base.
 
                Le jeu ne peut présentement fonctionner seulement qu'avec des
                joueurs utilisant le même processus, mais sera jouable en
-               multijoueur dans le futur lorsque le mode en ligne sera implanté.
+               multijoueur dans le futur lorsque le mode en ligne sera
+               implémenté.
 
                Évidemment, une interface graphique sera aussi écrite dans le
                futur pour une meilleure expérience.

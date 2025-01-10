@@ -17,6 +17,7 @@ module ProgramState where
 
 import qualified Data.Text as T
 import Data.Default
+import Data.FileEmbed
 
 import Control.Lens
 
@@ -24,33 +25,6 @@ import Brick.Forms
 import Brick.Focus
 
 import GameState
-
-_HABANGA_MENU_GAMETITLE_FILE_PATH_ :: String
-_HABANGA_MENU_GAMETITLE_FILE_PATH_ = "resources/habanga-tui/Habanga-title.txt"
-
-_HABANGA_PURPLECARD_35X53_ :: String
-_HABANGA_PURPLECARD_35X53_ = "resources/habanga-tui/habanga-purplecard-35x53.txt"
-
-_HABANGA_REDCARD_35X53_ :: String
-_HABANGA_REDCARD_35X53_ = "resources/habanga-tui/habanga-redcard-35x53.txt"
-
-_HABANGA_YELLOWCARD_35X53_ :: String
-_HABANGA_YELLOWCARD_35X53_ = "resources/habanga-tui/habanga-yellowcard-35x53.txt"
-
-_HABANGA_BLUECARD_35X53_ :: String
-_HABANGA_BLUECARD_35X53_ = "resources/habanga-tui/habanga-bluecard-35x53.txt"
-
-_HABANGA_PURPLECARD_10X15 :: String
-_HABANGA_PURPLECARD_10X15 = "resources/habanga-tui/habanga-purplecard-10x15.txt"
-
-_HABANGA_YELLOWCARD_10X15 :: String
-_HABANGA_YELLOWCARD_10X15 = "resources/habanga-tui/habanga-yellowcard-10x15.txt"
-
-_HABANGA_REDCARD_10X15    :: String
-_HABANGA_REDCARD_10X15 = "resources/habanga-tui/habanga-redcard-10x15.txt"
-
-_HABANGA_BLUECARD_10X15   :: String
-_HABANGA_BLUECARD_10X15 = "resources/habanga-tui/habanga-bluecard-10x15.txt"
 
 _HABANGA_MAX_PLAYER_COUNT_ :: Int
 _HABANGA_MAX_PLAYER_COUNT_ = 6
@@ -68,15 +42,15 @@ data ProgramResources = ProgramResources { _menuGameTitle   :: String
 makeLenses ''ProgramResources
 
 instance Default ProgramResources where
-  def = ProgramResources "[menuGameTitleMissing]"
-                         "[blueCard35x53Missing]"
-                         "[redCard35x53Missing]"
-                         "[yellowCard35x53Missing]"
-                         "[purpleCard35x53Missing]"
-                         "[blueCard10x15Missing]"
-                         "[redCard10x15Missing]"
-                         "[yellowCard10x15Missing]"
-                         "[purpleCard10x15Missing]"
+  def = ProgramResources $(makeRelativeToProject "resources/habanga-tui/Habanga-title.txt"            >>= embedStringFile)
+                         $(makeRelativeToProject "resources/habanga-tui/habanga-bluecard-35x53.txt"   >>= embedStringFile)
+                         $(makeRelativeToProject "resources/habanga-tui/habanga-redcard-35x53.txt"    >>= embedStringFile)
+                         $(makeRelativeToProject "resources/habanga-tui/habanga-yellowcard-35x53.txt" >>= embedStringFile)
+                         $(makeRelativeToProject "resources/habanga-tui/habanga-purplecard-35x53.txt" >>= embedStringFile)
+                         $(makeRelativeToProject "resources/habanga-tui/habanga-bluecard-10x15.txt"   >>= embedStringFile)
+                         $(makeRelativeToProject "resources/habanga-tui/habanga-redcard-10x15.txt"    >>= embedStringFile)
+                         $(makeRelativeToProject "resources/habanga-tui/habanga-yellowcard-10x15.txt" >>= embedStringFile)
+                         $(makeRelativeToProject "resources/habanga-tui/habanga-purplecard-10x15.txt" >>= embedStringFile)
 
 data GameInitializationFormElement = GameInitializationFormPlayerNamesField
   deriving (Eq, Ord, Show, Enum)

@@ -22,7 +22,7 @@ author:        Simon Désaulniers
 maintainer:    sim.desaulniers@gmail.com
 license:       GPL-3.0-or-later
 
-data-files:
+extra-source-files:
                resources/habanga-tui/habanga-bluecard-10x15.txt
                resources/habanga-tui/habanga-bluecard-35x53.txt
                resources/habanga-tui/habanga-purplecard-10x15.txt
@@ -66,14 +66,13 @@ executable habanga-tui
                         MainMenu,
                         GameView,
                         Widgets
-                        Paths_habanga
-    autogen-modules:    Paths_habanga
     build-depends:      habanga-core,
                         containers >= 0.6.7 && < 0.7,
                         text >= 2.0.2 && < 2.1,
                         brick >= 2.6 && < 2.7,
                         vty >= 6.2 && < 6.3,
-                        vty-crossplatform >= 0.4.0 && < 0.5
+                        vty-crossplatform >= 0.4.0 && < 0.5,
+                        file-embed >= 0.0.16 && < 0.1
     hs-source-dirs:     src/tui
     ghc-options:        -threaded
 

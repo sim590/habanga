@@ -21,10 +21,6 @@ author:        Simon Désaulniers
 maintainer:    sim.desaulniers@gmail.com
 license:       GPL-3.0-or-later
 
-source-repository head
-  type: git
-  location: https://github.com/sim590/habanga/
-
 data-files:
                resources/habanga-tui/habanga-bluecard-10x15.txt
                resources/habanga-tui/habanga-bluecard-35x53.txt
@@ -35,6 +31,10 @@ data-files:
                resources/habanga-tui/Habanga-title.txt
                resources/habanga-tui/habanga-yellowcard-10x15.txt
                resources/habanga-tui/habanga-yellowcard-35x53.txt
+
+source-repository head
+  type: git
+  location: https://github.com/sim590/habanga/
 
 common common-lang
     default-language:   Haskell2010

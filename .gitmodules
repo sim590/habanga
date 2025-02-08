@@ -1,0 +1,3 @@
+[submodule "deps/opendht-hs"]
+	path = deps/opendht-hs
+	url = https://github.com/sim590/opendht-hs/

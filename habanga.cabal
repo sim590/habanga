@@ -55,7 +55,8 @@ library habanga-core
     exposed-modules:    Game
                         Cards
                         GameState
-    build-depends:      random >= 1.2.1 && < 1.3
+    build-depends:      random >= 1.2.1 && < 1.3,
+                        opendht-hs
     hs-source-dirs:     src/core
 
 executable habanga-tui

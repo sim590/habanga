@@ -94,6 +94,9 @@ winner = do
 
    La fonction retourne le nombre de cartes pigées par le joueur à la fin de son tour.
 -}
+-- TODO: de façon à utiliser TVar
+-- processPlayerTurnAction
+--   :: (MonadIO m, MonadState s m, GameStated s)
 processPlayerTurnAction
   :: (MonadState s m, GameStated s)
   => Card          -- ^ La carte jouée par le joueur.

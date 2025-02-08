@@ -20,7 +20,6 @@ import Control.Lens
 
 import Cards
 
-
 data CardsOnTable = CardsOnTable { _red    :: (Card, Card)
                                  , _yellow :: (Card, Card)
                                  , _blue   :: (Card, Card)
@@ -40,13 +39,32 @@ makeLenses ''PlayerState
 instance Show PlayerState where
   show p = (p^.name) ++ ": " ++ show (p^.cardsInHand)
 
+type GameCode = String
+
+data NetworkStatus = Awaiting
+                   | AwaitingConnection
+                   | AwaitingPlayerAction
+                   | AwaitingOtherPlayerAction
+                   | GameConnectionFail
+                   | EndingGame
+                   | ShuttingDown
+
 data GameState = GameState { _cardsOnTable :: CardsOnTable
                            , _deck         :: [Card]
                            , _players      :: [PlayerState]
                            }
+               | OnlineGameState { _cardsOnTable  :: CardsOnTable
+                                 , _deck          :: [Card]
+                                 , _players       :: [PlayerState]
+                                 , _networkStatus :: NetworkStatus
+                                 , _gameCode      :: GameCode
+                                 }
 makeLenses ''GameState
 
 class GameStated a where
+  -- TODO: de façon à utiliser TVar
+  -- getGameState :: a -> IO GameState
+  -- setGameState :: a -> GameState -> IO a
   getGameState :: a -> GameState
   setGameState :: a -> GameState -> a
 

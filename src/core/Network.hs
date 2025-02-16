@@ -87,10 +87,10 @@ _GAME_JOIN_REQUEST_UTYPE_ = show $ toConstr $ GameJoinRequest ""
 shutdownCb :: ShutdownCallback
 shutdownCb = return ()
 
-playerConnectionCb :: Int -> TVar GameState -> ValueCallback
-playerConnectionCb _ _    (InputValue {}) _ = error $ opendhtWrongValueCtorError "InputValue"
-playerConnectionCb _ _    (MetaValue {})  _ = error $ opendhtWrongValueCtorError "MetaValue"
-playerConnectionCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
+gameAnnounceCb :: Int -> TVar GameState -> ValueCallback
+gameAnnounceCb _ _    (InputValue {}) _ = error $ opendhtWrongValueCtorError "InputValue"
+gameAnnounceCb _ _    (MetaValue {})  _ = error $ opendhtWrongValueCtorError "MetaValue"
+gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
   | utype == _GAME_JOIN_REQUEST_UTYPE_ = do
     let
       treatPacket (HabangaPacket pId (GameJoinRequest pName)) gs =
@@ -126,7 +126,7 @@ announceGame (GameSettings gc maxNumberOfPlayers) gsTV = do
     doneCb success  = atomically $ modifyTVar gsTV $ onDone success
   liftIO $ atomically $ modifyTVar gsTV (networkStatus .~ AwaitingConnection)
   void $ DhtRunner.put gcHash gameAnnounceValue doneCb True
-  DhtRunner.listen gcHash (playerConnectionCb maxNumberOfPlayers gsTV) shutdownCb
+  DhtRunner.listen gcHash (gameAnnounceCb maxNumberOfPlayers gsTV) shutdownCb
 
 initializeDHT :: DhtRunnerConfig -> DhtRunnerM Dht ()
 initializeDHT dhtRconf = do

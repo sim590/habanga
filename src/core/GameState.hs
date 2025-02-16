@@ -69,6 +69,7 @@ data GameState = GameState { _cardsOnTable :: CardsOnTable
                                  , _playersIdentities     :: Map OnlinePlayerID OnlinePlayerName
                                  , _networkStatus         :: NetworkStatus
                                  , _gameSettings          :: OnlineGameSettings
+                                 , _myID                  :: String
                                  }
 makeLenses ''GameState
 

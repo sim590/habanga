@@ -111,11 +111,10 @@ gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
   | otherwise = return True
 
 announceGame :: OnlineGameSettings -> TVar GameState -> DhtRunnerM Dht OpToken
-announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = do
-  myHash <- DhtRunner.getNodeIdHash
+announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
   gcHash <- liftIO $ unDht $ infoHashFromString gc
   let
-    packet            = HabangaPacket { _senderID   = show myHash
+    packet            = HabangaPacket { _senderID   = gs ^. myID
                                       , _content    = GameAnnouncement
                                       }
     gameAnnounceValue = InputValue { _valueData     = BS.toStrict $ serialise packet
@@ -156,6 +155,8 @@ loop dhtRconf = ask >>= \ gsTV -> liftIO $ readTVarIO gsTV >>= \ case
         b  <- handleNetworkStatus gsTV (gs^?!networkStatus)
         innerLoop b
     initializeDHT dhtRconf
+    myHash <- DhtRunner.getNodeIdHash
+    liftIO $ atomically $ modifyTVar gsTV (myID .~ take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ (show myHash))
     innerLoop True
   _ -> error "Network.loop: l'état du jeu passé n'était pas construit par OnlineGameState.."
 

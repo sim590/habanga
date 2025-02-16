@@ -110,8 +110,8 @@ gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
                                                                else (False, gs)
   | otherwise = return True
 
-announceGame :: GameSettings -> TVar GameState -> DhtRunnerM Dht OpToken
-announceGame (GameSettings gc maxNumberOfPlayers) gsTV = do
+announceGame :: OnlineGameSettings -> TVar GameState -> DhtRunnerM Dht OpToken
+announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = do
   myHash <- DhtRunner.getNodeIdHash
   gcHash <- liftIO $ unDht $ infoHashFromString gc
   let

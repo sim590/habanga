@@ -54,10 +54,10 @@ data NetworkStatus = Awaiting
                    | EndingGame
                    | ShuttingDown
 
-data GameSettings = GameSettings { _gameCode        :: GameCode
-                                 , _numberOfPlayers :: Int
-                                 }
-makeLenses ''GameSettings
+data OnlineGameSettings = OnlineGameSettings { _gameCode        :: GameCode
+                                             , _numberOfPlayers :: Int
+                                             }
+makeLenses ''OnlineGameSettings
 
 data GameState = GameState { _cardsOnTable :: CardsOnTable
                            , _deck         :: [Card]
@@ -68,7 +68,7 @@ data GameState = GameState { _cardsOnTable :: CardsOnTable
                                  , _players               :: [PlayerState]
                                  , _playersIdentities     :: Map OnlinePlayerID OnlinePlayerName
                                  , _networkStatus         :: NetworkStatus
-                                 , _gameSettings          :: GameSettings
+                                 , _gameSettings          :: OnlineGameSettings
                                  }
 makeLenses ''GameState
 

@@ -93,20 +93,20 @@ gameAnnounceCb _ _    (MetaValue {})  _ = error $ opendhtWrongValueCtorError "Me
 gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
   | utype == _GAME_JOIN_REQUEST_UTYPE_ = do
     let
-      treatPacket (HabangaPacket pId (GameJoinRequest pName)) gs =
-        let pId'                     = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ pId
-            stateWithNewPlayer       = gs & playersIdentities %~ Map.insert pId' pName
+      treatPacket (HabangaPacket sId (GameJoinRequest pName)) gs =
+        let sId'                     = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
+            stateWithNewPlayer       = gs & playersIdentities %~ Map.insert sId' pName
             stillSpaceAfterNewPlayer = length (stateWithNewPlayer^.playersIdentities) < maxNumberOfPlayers
-         in case Map.lookup pId' (gs^.playersIdentities) of
+         in case Map.lookup sId' (gs^.playersIdentities) of
               Just _  -> (True, gs)
               Nothing -> (stillSpaceAfterNewPlayer, stateWithNewPlayer)
       treatPacket _ gs = (True, gs)
 
-    hPacket <- try $ return $ deserialise $ BS.fromStrict d
-    case hPacket of
+    eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
+    case eitherHabangaPacketOrFail of
       Left (DeserialiseFailure {}) -> return True
-      Right hp                     -> atomically $ stateTVar gsTV $ \ gs ->
-        if length (gs^.playersIdentities) < maxNumberOfPlayers then treatPacket hp gs
+      Right habangaPacket                     -> atomically $ stateTVar gsTV $ \ gs ->
+        if length (gs^.playersIdentities) < maxNumberOfPlayers then treatPacket habangaPacket gs
                                                                else (False, gs)
   | otherwise = return True
 

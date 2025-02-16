@@ -67,7 +67,6 @@ opendhtWrongValueCtorError = (<>) "Network: la fonction de rappel (listen) a ret
 
 data HabangaPacketContent = GameAnnouncement
                           | GameJoinRequest { _playerName :: String
-                                            , _playerID   :: String
                                             }
   deriving (Generic, Data, Show)
 data HabangaPacket = HabangaPacket { _senderID   :: String
@@ -82,7 +81,7 @@ _GAME_ANNOUNCEMENT_UTYPE_ :: String
 _GAME_ANNOUNCEMENT_UTYPE_ = show $ toConstr GameAnnouncement
 
 _GAME_JOIN_REQUEST_UTYPE_ :: String
-_GAME_JOIN_REQUEST_UTYPE_ = show $ toConstr $ GameJoinRequest "" ""
+_GAME_JOIN_REQUEST_UTYPE_ = show $ toConstr $ GameJoinRequest ""
 
 -- TODO:
 shutdownCb :: ShutdownCallback
@@ -94,7 +93,7 @@ playerConnectionCb _ _    (MetaValue {})  _ = error $ opendhtWrongValueCtorError
 playerConnectionCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
   | utype == _GAME_JOIN_REQUEST_UTYPE_ = do
     let
-      treatPacket (HabangaPacket _ (GameJoinRequest pName pId)) gs =
+      treatPacket (HabangaPacket pId (GameJoinRequest pName)) gs =
         let pId'                     = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ pId
             stateWithNewPlayer       = gs & playersIdentities %~ Map.insert pId' pName
             stillSpaceAfterNewPlayer = length (stateWithNewPlayer^.playersIdentities) < maxNumberOfPlayers

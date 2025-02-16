@@ -93,9 +93,10 @@ newNetworkStatusIfNotFail ns gs = let currentNetworkStatus = gs ^?! networkStatu
   _                 -> ns
 
 gameAnnounceCb :: Int -> TVar GameState -> ValueCallback
-gameAnnounceCb _ _    (InputValue {}) _ = error $ opendhtWrongValueCtorError "InputValue"
-gameAnnounceCb _ _    (MetaValue {})  _ = error $ opendhtWrongValueCtorError "MetaValue"
-gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
+gameAnnounceCb _                  _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
+gameAnnounceCb _                  _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
+gameAnnounceCb _                  _    (StoredValue {})            True = return True
+gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) False
   | utype == _GAME_JOIN_REQUEST_UTYPE_ = do
     let
       treatPacket (HabangaPacket sId (GameJoinRequest pName)) gs =

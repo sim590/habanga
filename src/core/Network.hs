@@ -87,6 +87,11 @@ _GAME_JOIN_REQUEST_UTYPE_ = show $ toConstr $ GameJoinRequest ""
 shutdownCb :: ShutdownCallback
 shutdownCb = return ()
 
+newNetworkStatusIfNotFail :: NetworkStatus -> GameState -> NetworkStatus
+newNetworkStatusIfNotFail ns gs = let currentNetworkStatus = gs ^?! networkStatus in case currentNetworkStatus of
+  NetworkFailure {} -> currentNetworkStatus
+  _                 -> ns
+
 gameAnnounceCb :: Int -> TVar GameState -> ValueCallback
 gameAnnounceCb _ _    (InputValue {}) _ = error $ opendhtWrongValueCtorError "InputValue"
 gameAnnounceCb _ _    (MetaValue {})  _ = error $ opendhtWrongValueCtorError "MetaValue"
@@ -111,19 +116,21 @@ gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
   | otherwise = return True
 
 announceGame :: OnlineGameSettings -> TVar GameState -> DhtRunnerM Dht OpToken
-announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
+announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = liftIO (readTVarIO gsTV) >>= \ initialGameState -> do
   gcHash <- liftIO $ unDht $ infoHashFromString gc
   let
-    packet            = HabangaPacket { _senderID   = gs ^. myID
+    packet            = HabangaPacket { _senderID   = initialGameState ^. myID
                                       , _content    = GameAnnouncement
                                       }
     gameAnnounceValue = InputValue { _valueData     = BS.toStrict $ serialise packet
                                    , _valueUserType = _GAME_ANNOUNCEMENT_UTYPE_
                                    }
-    onDone False gs' = gs' & networkStatus .~ GameAnnouncementFailure "network: échec de l'envoi du paquet d'annonce de la partie."
-    onDone _ gs'     = gs'
+    onDone False gs = gs & networkStatus .~ newNetworkStatusIfNotFail failure gs
+      where
+        failure = NetworkFailure (GameAnnouncementFailure "network: échec de l'envoi du paquet d'annonce de la partie.")
+    onDone _ gs     = gs
     doneCb success  = atomically $ modifyTVar gsTV $ onDone success
-  liftIO $ atomically $ modifyTVar gsTV (networkStatus .~ AwaitingConnection)
+  liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusIfNotFail AwaitingConnection gs
   void $ DhtRunner.put gcHash gameAnnounceValue doneCb True
   DhtRunner.listen gcHash (gameAnnounceCb maxNumberOfPlayers gsTV) shutdownCb
 
@@ -140,7 +147,7 @@ handleNetworkStatus gsTV status               = handle status >> return True
     handle RequestGameAnnounce = do
       gs <- liftIO $ readTVarIO gsTV
       void $ announceGame (gs^?!gameSettings) gsTV
-    handle (GameAnnouncementFailure msg) = undefined -- TODO: annuler tous les puts/listen
+    handle (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen
     handle _ = return ()
 
 loop :: (MonadIO m, MonadReader (TVar GameState) m) => DhtRunnerConfig -> m ()

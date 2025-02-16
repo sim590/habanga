@@ -45,14 +45,17 @@ type GameCode = String
 type OnlinePlayerID = String
 type OnlinePlayerName = String
 
+data NetworkFailureType = GameAnnouncementFailure String
+                        | GameJoinRequestFailure String
+                        | GameInitialSetupFailure String
 data NetworkStatus = Awaiting
                    | AwaitingConnection
                    | AwaitingPlayerTurn
                    | AwaitingOtherPlayerTurn
                    | RequestGameAnnounce
-                   | GameAnnouncementFailure String
                    | EndingGame
                    | ShuttingDown
+                   | NetworkFailure NetworkFailureType
 
 data OnlineGameSettings = OnlineGameSettings { _gameCode        :: GameCode
                                              , _numberOfPlayers :: Int

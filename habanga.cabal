@@ -47,6 +47,7 @@ common common-base
                         transformers ^>= 0.5.6,
                         lens         ^>= 5.3.3,
                         mtl          ^>= 2.2.2,
+                        containers   ^>= 0.6.7,
                         data-default ^>= 0.8.0
 
 library habanga-core
@@ -72,7 +73,6 @@ executable habanga-tui
                         GameView,
                         Widgets
     build-depends:      habanga-core,
-                        containers        ^>= 0.6.7,
                         text              ^>= 2.0.2,
                         brick             ^>= 2.6,
                         vty               ^>= 6.2,

@@ -13,6 +13,7 @@
 
 module GameState where
 
+import Data.Map (Map)
 import Data.Default
 import qualified Data.List as List
 
@@ -41,23 +42,33 @@ instance Show PlayerState where
 
 type GameCode = String
 
+type OnlinePlayerID = String
+type OnlinePlayerName = String
+
 data NetworkStatus = Awaiting
                    | AwaitingConnection
-                   | AwaitingPlayerAction
-                   | AwaitingOtherPlayerAction
-                   | GameConnectionFail
+                   | AwaitingPlayerTurn
+                   | AwaitingOtherPlayerTurn
+                   | RequestGameAnnounce
+                   | GameAnnouncementFailure
                    | EndingGame
                    | ShuttingDown
+
+data GameSettings = GameSettings { _gameCode        :: GameCode
+                                 , _numberOfPlayers :: Int
+                                 }
+makeLenses ''GameSettings
 
 data GameState = GameState { _cardsOnTable :: CardsOnTable
                            , _deck         :: [Card]
                            , _players      :: [PlayerState]
                            }
-               | OnlineGameState { _cardsOnTable  :: CardsOnTable
-                                 , _deck          :: [Card]
-                                 , _players       :: [PlayerState]
-                                 , _networkStatus :: NetworkStatus
-                                 , _gameCode      :: GameCode
+               | OnlineGameState { _cardsOnTable          :: CardsOnTable
+                                 , _deck                  :: [Card]
+                                 , _players               :: [PlayerState]
+                                 , _playersIdentities     :: Map OnlinePlayerID OnlinePlayerName
+                                 , _networkStatus         :: NetworkStatus
+                                 , _gameSettings          :: GameSettings
                                  }
 makeLenses ''GameState
 
@@ -92,6 +103,9 @@ instance Show GameState where
          ++ List.intercalate "\n" [ "Cards on table:"
                                   , List.intercalate "\n" $ map ("\t"++) (lines (show $ gs^.cardsOnTable))
                                   ]
+
+_MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ :: Int
+_MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ = 6
 
 {-| Lentille (Lens' s GameState)
 

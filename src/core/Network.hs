@@ -14,18 +14,23 @@
 
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 
-module Network ( networkLoop
+module Network ( loop
                ) where
 
 import GHC.Generics
 
+import Data.Data
 import Data.Char
+import qualified Data.Map as Map
 import qualified Data.ByteString as BS
-import Data.Default
 
 import Codec.Serialise
 
+import Control.Exception
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad.Trans
@@ -38,12 +43,18 @@ import OpenDHT.InfoHash
 import OpenDHT.DhtRunner ( DhtRunnerM
                          , DhtRunnerConfig
                          , ValueCallback
+                         , ShutdownCallback
                          , runDhtRunnerM
                          , proxyServer
+                         , OpToken
                          )
 import qualified OpenDHT.DhtRunner as DhtRunner
 
 import GameState
+
+-- Le temps de pause de la boucle en microsecondes
+_MAIN_LOOP_THREAD_SLEEP_TIME_ :: Int
+_MAIN_LOOP_THREAD_SLEEP_TIME_ = 500000
 
 _DEFAULT_BOOTSTRAP_ADDR_ :: String
 _DEFAULT_BOOTSTRAP_ADDR_  = "bootstrap.jami.net"
@@ -54,39 +65,69 @@ _DEFAULT_BOOTSTRAP_PORT_  = "4222"
 opendhtWrongValueCtorError :: String -> String
 opendhtWrongValueCtorError = (<>) "Network: la fonction de rappel (listen) a retourné le type de valeur inattendu "
 
-data HabangaPacketType = GameAnnounce
-  deriving (Generic, Show)
+data HabangaPacketContent = GameAnnouncement
+                          | GameJoinRequest { _playerName :: String
+                                            , _playerID   :: String
+                                            }
+  deriving (Generic, Data, Show)
 data HabangaPacket = HabangaPacket { _senderID   :: String
-                                   , _packetType :: HabangaPacketType
+                                   , _content    :: HabangaPacketContent
                                    }
   deriving Generic
 
-instance Serialise HabangaPacketType
+instance Serialise HabangaPacketContent
 instance Serialise HabangaPacket
 
-listenForPlayerConnectionCb :: ValueCallback
-listenForPlayerConnectionCb (InputValue {})  _       = error $ opendhtWrongValueCtorError "InputValue"
-listenForPlayerConnectionCb (MetaValue {})   _       = error $ opendhtWrongValueCtorError "MetaValue"
-listenForPlayerConnectionCb (StoredValue {}) expired = undefined
+_GAME_ANNOUNCEMENT_UTYPE_ :: String
+_GAME_ANNOUNCEMENT_UTYPE_ = show $ toConstr GameAnnouncement
 
-announceGame :: GameCode -> TVar GameState -> DhtRunnerM Dht ()
-announceGame gc gsTV = do
+_GAME_JOIN_REQUEST_UTYPE_ :: String
+_GAME_JOIN_REQUEST_UTYPE_ = show $ toConstr $ GameJoinRequest "" ""
+
+-- TODO:
+shutdownCb :: ShutdownCallback
+shutdownCb = return ()
+
+playerConnectionCb :: Int -> TVar GameState -> ValueCallback
+playerConnectionCb _ _    (InputValue {}) _ = error $ opendhtWrongValueCtorError "InputValue"
+playerConnectionCb _ _    (MetaValue {})  _ = error $ opendhtWrongValueCtorError "MetaValue"
+playerConnectionCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) _
+  | utype == _GAME_JOIN_REQUEST_UTYPE_ = do
+    let
+      treatPacket (HabangaPacket _ (GameJoinRequest pName pId)) gs =
+        let pId'                     = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ pId
+            stateWithNewPlayer       = gs & playersIdentities %~ Map.insert pId' pName
+            stillSpaceAfterNewPlayer = length (stateWithNewPlayer^.playersIdentities) < maxNumberOfPlayers
+         in case Map.lookup pId' (gs^.playersIdentities) of
+              Just _  -> (True, gs)
+              Nothing -> (stillSpaceAfterNewPlayer, stateWithNewPlayer)
+      treatPacket _ gs = (True, gs)
+
+    hPacket <- try $ return $ deserialise $ BS.fromStrict d
+    case hPacket of
+      Left (DeserialiseFailure {}) -> return True
+      Right hp                     -> atomically $ stateTVar gsTV $ \ gs ->
+        if length (gs^.playersIdentities) < maxNumberOfPlayers then treatPacket hp gs
+                                                               else (False, gs)
+  | otherwise = return True
+
+announceGame :: GameSettings -> TVar GameState -> DhtRunnerM Dht OpToken
+announceGame (GameSettings gc maxNumberOfPlayers) gsTV = do
   myHash <- DhtRunner.getNodeIdHash
   gcHash <- liftIO $ unDht $ infoHashFromString gc
   let
     packet            = HabangaPacket { _senderID   = show myHash
-                                      , _packetType = GameAnnounce
+                                      , _content    = GameAnnouncement
                                       }
     gameAnnounceValue = InputValue { _valueData     = BS.toStrict $ serialise packet
-                                   , _valueUserType = show GameAnnounce
+                                   , _valueUserType = _GAME_ANNOUNCEMENT_UTYPE_
                                    }
-    onDone False gs = gs & networkStatus .~ GameConnectionFail
-    onDone True gs  = gs & networkStatus .~ AwaitingConnection
+    onDone False gs = gs & networkStatus .~ GameAnnouncementFailure
+    onDone _ gs     = gs
     doneCb success  = atomically $ modifyTVar gsTV $ onDone success
+  liftIO $ atomically $ modifyTVar gsTV (networkStatus .~ AwaitingConnection)
   void $ DhtRunner.put gcHash gameAnnounceValue doneCb True
-
-shutdownCb :: IO ()
-shutdownCb  = return ()
+  DhtRunner.listen gcHash (playerConnectionCb maxNumberOfPlayers gsTV) shutdownCb
 
 initializeDHT :: DhtRunnerConfig -> DhtRunnerM Dht ()
 initializeDHT dhtRconf = do
@@ -94,26 +135,30 @@ initializeDHT dhtRconf = do
   when (all isSpace $ dhtRconf^.proxyServer) $
     DhtRunner.bootstrap _DEFAULT_BOOTSTRAP_ADDR_ _DEFAULT_BOOTSTRAP_PORT_
 
--- TODO: annuler le put permanent quand les joueurs sont tous connectés (usertype=GameAnnounce)
-handleNetworkStatus :: NetworkStatus -> DhtRunnerM Dht Bool
-handleNetworkStatus ShuttingDown = return False
-handleNetworkStatus status       = handle status >> return True
+handleNetworkStatus :: TVar GameState -> NetworkStatus -> DhtRunnerM Dht Bool
+handleNetworkStatus _ ShuttingDown            = return False
+handleNetworkStatus _ GameAnnouncementFailure = return False
+handleNetworkStatus gsTV status               = handle status >> return True
   where
+    handle RequestGameAnnounce = do
+      gs <- liftIO $ readTVarIO gsTV
+      void $ announceGame (gs^?!gameSettings) gsTV
     handle _ = undefined
 
-networkLoop :: (MonadIO m, MonadReader (TVar GameState) m) => GameCode -> DhtRunnerConfig -> m ()
-networkLoop gc dhtRconf = ask >>= \ gsTV -> liftIO $ runDhtRunnerM shutdownCb $ do
-  let
-    loop False = return ()
-    loop True  = do
-      gs <- liftIO $ do
-        threadDelay 500000
-        readTVarIO gsTV
-      b  <- handleNetworkStatus (gs^?!networkStatus)
-      loop b
-  initializeDHT dhtRconf
-  announceGame gc gsTV
-  loop True
+loop :: (MonadIO m, MonadReader (TVar GameState) m) => DhtRunnerConfig -> m ()
+loop dhtRconf = ask >>= \ gsTV -> liftIO $ readTVarIO gsTV >>= \ case
+  OnlineGameState {} -> runDhtRunnerM shutdownCb $ do
+    let
+      innerLoop False = return ()
+      innerLoop True  = do
+        gs <- liftIO $ do
+          threadDelay _MAIN_LOOP_THREAD_SLEEP_TIME_
+          readTVarIO gsTV
+        b  <- handleNetworkStatus gsTV (gs^?!networkStatus)
+        innerLoop b
+    initializeDHT dhtRconf
+    innerLoop True
+  _ -> error "Network.loop: l'état du jeu passé n'était pas construit par OnlineGameState.."
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

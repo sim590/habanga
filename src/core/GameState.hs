@@ -50,7 +50,7 @@ data NetworkStatus = Awaiting
                    | AwaitingPlayerTurn
                    | AwaitingOtherPlayerTurn
                    | RequestGameAnnounce
-                   | GameAnnouncementFailure
+                   | GameAnnouncementFailure String
                    | EndingGame
                    | ShuttingDown
 

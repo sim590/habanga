@@ -120,8 +120,8 @@ announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = liftIO (readTVarI
     gameAnnounceValue = InputValue { _valueData     = BS.toStrict $ serialise packet
                                    , _valueUserType = _GAME_ANNOUNCEMENT_UTYPE_
                                    }
-    onDone False gs = gs & networkStatus .~ GameAnnouncementFailure
-    onDone _ gs     = gs
+    onDone False gs' = gs' & networkStatus .~ GameAnnouncementFailure "network: échec de l'envoi du paquet d'annonce de la partie."
+    onDone _ gs'     = gs'
     doneCb success  = atomically $ modifyTVar gsTV $ onDone success
   liftIO $ atomically $ modifyTVar gsTV (networkStatus .~ AwaitingConnection)
   void $ DhtRunner.put gcHash gameAnnounceValue doneCb True
@@ -135,13 +135,13 @@ initializeDHT dhtRconf = do
 
 handleNetworkStatus :: TVar GameState -> NetworkStatus -> DhtRunnerM Dht Bool
 handleNetworkStatus _ ShuttingDown            = return False
-handleNetworkStatus _ GameAnnouncementFailure = return False
 handleNetworkStatus gsTV status               = handle status >> return True
   where
     handle RequestGameAnnounce = do
       gs <- liftIO $ readTVarIO gsTV
       void $ announceGame (gs^?!gameSettings) gsTV
-    handle _ = undefined
+    handle (GameAnnouncementFailure msg) = undefined -- TODO: annuler tous les puts/listen
+    handle _ = return ()
 
 loop :: (MonadIO m, MonadReader (TVar GameState) m) => DhtRunnerConfig -> m ()
 loop dhtRconf = ask >>= \ gsTV -> liftIO $ readTVarIO gsTV >>= \ case

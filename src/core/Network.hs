@@ -25,6 +25,7 @@ import GHC.Generics
 
 import Data.Data
 import Data.Char
+import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.ByteString as BS
 
@@ -68,6 +69,9 @@ opendhtWrongValueCtorError = (<>) "Network: la fonction de rappel (listen) a ret
 data HabangaPacketContent = GameAnnouncement
                           | GameJoinRequest { _playerName :: String
                                             }
+                          | GameJoinRequestAccepted
+                          | GameSetup { _playersIdentities :: Map OnlinePlayerID OnlinePlayerName
+                                      }
   deriving (Generic, Data, Show)
 data HabangaPacket = HabangaPacket { _senderID   :: String
                                    , _content    :: HabangaPacketContent
@@ -83,6 +87,9 @@ _GAME_ANNOUNCEMENT_UTYPE_ = show $ toConstr GameAnnouncement
 _GAME_JOIN_REQUEST_UTYPE_ :: String
 _GAME_JOIN_REQUEST_UTYPE_ = show $ toConstr $ GameJoinRequest ""
 
+_GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ :: String
+_GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ = show $ toConstr GameJoinRequestAccepted
+
 -- TODO:
 shutdownCb :: ShutdownCallback
 shutdownCb = return ()
@@ -91,6 +98,65 @@ newNetworkStatusIfNotFail :: NetworkStatus -> GameState -> NetworkStatus
 newNetworkStatusIfNotFail ns gs = let currentNetworkStatus = gs ^?! networkStatus in case currentNetworkStatus of
   NetworkFailure {} -> currentNetworkStatus
   _                 -> ns
+
+gameJoinRequestCb :: String -> TVar GameState -> ValueCallback
+gameJoinRequestCb _    _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
+gameJoinRequestCb _    _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
+gameJoinRequestCb _    _    (StoredValue {})            True = return True
+gameJoinRequestCb myId gsTV (StoredValue d _ _ _ utype) False
+  | utype == _GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ = do
+    let
+      treatPacket (HabangaPacket sId (GameSetup playersIds)) gs = (True, gs')
+        where
+          sId'                 = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
+          myId'                = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ myId
+          currentNetworkStatus = gs ^?! networkStatus
+          gs'                  = gs
+                                    & playersIdentities              .~ playersIds
+                                    & gameHostID                     .~ sId'
+                                    & gameSettings . numberOfPlayers .~ length playersIds
+                                    & networkStatus                  .~ networkStatus'
+          networkStatus'
+            | not (Map.member myId' playersIds) = NetworkFailure $ GameInitialSetupFailure ourIdNotFoundFailureMsg
+            | not (Map.member sId' playersIds)  = NetworkFailure $ GameInitialSetupFailure hostIdNotFoundFairureMsg
+            | otherwise                         = case currentNetworkStatus of
+              GameInitialization -> currentNetworkStatus
+              _                  -> newNetworkStatusIfNotFail GameInitialization gs
+      treatPacket (HabangaPacket sId GameJoinRequestAccepted) gs = (True, gsWithGameHostID)
+        where
+          sId'             = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
+          gsWithGameHostID = gs
+                                & gameHostID    .~ sId'
+                                & networkStatus .~ newNetworkStatusIfNotFail (AwaitingEvent GameStarted) gs
+      treatPacket _ gs = (True, gs)
+
+      ourIdNotFoundFailureMsg  = "network: on a reçu un paquet GameSetup, mais notre ID n'était pas dans la liste."
+      hostIdNotFoundFairureMsg = "network: on a reçu un paquet GameSetup, mais l'ID de l'hôte n'était pas dans la liste."
+
+    eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
+    case eitherHabangaPacketOrFail of
+      Left (DeserialiseFailure {}) -> return True
+      Right habangaPacket          -> atomically $ stateTVar gsTV $ treatPacket habangaPacket
+  | otherwise = return True
+
+requestToJoinGame :: GameCode -> String -> TVar GameState -> DhtRunnerM Dht ()
+requestToJoinGame gc playerName gsTV = liftIO (readTVarIO gsTV) >>= \ initialGameState -> do
+  gcHash <- liftIO $ unDht $ infoHashFromString gc
+  let
+    packet               = HabangaPacket { _senderID = initialGameState ^. myID
+                                         , _content  = GameJoinRequest playerName
+                                         }
+    gameJoinRequestValue = InputValue { _valueData     = BS.toStrict $ serialise packet
+                                      , _valueUserType = _GAME_JOIN_REQUEST_UTYPE_
+                                      }
+    onDone False gs = gs & networkStatus .~ newNetworkStatusIfNotFail failure gs
+      where
+        failure = NetworkFailure (GameJoinRequestFailure "network: échec de l'envoi d'une requête pour joindre la partie.")
+    onDone _ gs     = gs
+    doneCb success  = atomically $ modifyTVar gsTV $ onDone success
+  liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusIfNotFail (AwaitingEvent Connection) gs
+  void $ DhtRunner.put gcHash gameJoinRequestValue doneCb False
+  void $ DhtRunner.listen gcHash (gameJoinRequestCb (initialGameState ^. myID) gsTV) shutdownCb
 
 gameAnnounceCb :: Int -> TVar GameState -> ValueCallback
 gameAnnounceCb _                  _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
@@ -147,14 +213,17 @@ initializeDHT dhtRconf = do
     DhtRunner.bootstrap _DEFAULT_BOOTSTRAP_ADDR_ _DEFAULT_BOOTSTRAP_PORT_
 
 handleNetworkStatus :: TVar GameState -> NetworkStatus -> DhtRunnerM Dht Bool
-handleNetworkStatus _ ShuttingDown            = return False
-handleNetworkStatus gsTV status               = handle status >> return True
+handleNetworkStatus _ ShuttingDown = return False
+handleNetworkStatus gsTV status    = handleNS status >> return True
   where
-    handle (Request GameAnnounce) = do
+    handleNS (Request JoinGame) = do
+      gs <- liftIO $ readTVarIO gsTV
+      requestToJoinGame (gs^?!gameSettings.gameCode) (gs^.myName) gsTV
+    handleNS (Request GameAnnounce) = do
       gs <- liftIO $ readTVarIO gsTV
       void $ announceGame (gs^?!gameSettings) gsTV
-    handle (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen
-    handle _ = return ()
+    handleNS (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen
+    handleNS _ = return ()
 
 loop :: (MonadIO m, MonadReader (TVar GameState) m) => DhtRunnerConfig -> m ()
 loop dhtRconf = ask >>= \ gsTV -> liftIO $ readTVarIO gsTV >>= \ case

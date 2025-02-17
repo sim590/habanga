@@ -131,7 +131,7 @@ announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = liftIO (readTVarI
         failure = NetworkFailure (GameAnnouncementFailure "network: échec de l'envoi du paquet d'annonce de la partie.")
     onDone _ gs     = gs
     doneCb success  = atomically $ modifyTVar gsTV $ onDone success
-  liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusIfNotFail AwaitingConnection gs
+  liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusIfNotFail (AwaitingEvent Connection) gs
   void $ DhtRunner.put gcHash gameAnnounceValue doneCb True
   DhtRunner.listen gcHash (gameAnnounceCb maxNumberOfPlayers gsTV) shutdownCb
 
@@ -145,7 +145,7 @@ handleNetworkStatus :: TVar GameState -> NetworkStatus -> DhtRunnerM Dht Bool
 handleNetworkStatus _ ShuttingDown            = return False
 handleNetworkStatus gsTV status               = handle status >> return True
   where
-    handle RequestGameAnnounce = do
+    handle (Request GameAnnounce) = do
       gs <- liftIO $ readTVarIO gsTV
       void $ announceGame (gs^?!gameSettings) gsTV
     handle (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen

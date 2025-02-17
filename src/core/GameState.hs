@@ -48,11 +48,17 @@ type OnlinePlayerName = String
 data NetworkFailureType = GameAnnouncementFailure String
                         | GameJoinRequestFailure String
                         | GameInitialSetupFailure String
-data NetworkStatus = Awaiting
-                   | AwaitingConnection
-                   | AwaitingPlayerTurn
-                   | AwaitingOtherPlayerTurn
-                   | RequestGameAnnounce
+data OnlineGameStatus = AwaitingPlayerTurn
+                      | AwaitingOtherPlayerTurn
+data NetworkRequest = GameAnnounce
+                    | JoinGame
+                    | GameStart
+data NetworkEvent = Connection
+                  | GameStarted
+data NetworkStatus = AwaitingEvent NetworkEvent
+                   | Request NetworkRequest
+                   | GameOnGoing OnlineGameStatus
+                   | GameInitialization
                    | EndingGame
                    | ShuttingDown
                    | NetworkFailure NetworkFailureType

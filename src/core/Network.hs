@@ -100,12 +100,17 @@ gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) False
   | utype == _GAME_JOIN_REQUEST_UTYPE_ = do
     let
       treatPacket (HabangaPacket sId (GameJoinRequest pName)) gs =
-        let sId'                     = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
-            stateWithNewPlayer       = gs & playersIdentities %~ Map.insert sId' pName
-            stillSpaceAfterNewPlayer = length (stateWithNewPlayer^.playersIdentities) < maxNumberOfPlayers
+        let sId' = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
+            gs'  = gs
+                      & playersIdentities %~ Map.insert sId' pName
+                      & networkStatus     .~ networkStatus'
+            networkStatus'
+              | not stillHasSpaceForOtherPlayers = newNetworkStatusIfNotFail (AwaitingEvent GameStarted) gs
+              | otherwise                        = gs ^?! networkStatus
+            stillHasSpaceForOtherPlayers = length (gs'^.playersIdentities) < maxNumberOfPlayers
          in case Map.lookup sId' (gs^.playersIdentities) of
               Just _  -> (True, gs)
-              Nothing -> (stillSpaceAfterNewPlayer, stateWithNewPlayer)
+              Nothing -> (stillHasSpaceForOtherPlayers, gs')
       treatPacket _ gs = (True, gs)
 
     eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d

@@ -141,6 +141,18 @@ instance Show GameState where
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ :: Int
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ = 6
 
+defaultOnlineGameState :: GameState
+defaultOnlineGameState = OnlineGameState { _cardsOnTable      = def
+                                         , _deck              = []
+                                         , _players           = []
+                                         , _playersIdentities = mempty
+                                         , _networkStatus     = AwaitingRequest
+                                         , _gameSettings      = OnlineGameSettings [] 0
+                                         , _gameHostID        = ""
+                                         , _myID              = ""
+                                         , _myName            = ""
+                                         }
+
 {-| Lentille (Lens' s GameState)
 
    Ceci permet d'interagir avec GameState dans (MonadState s).

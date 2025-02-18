@@ -14,8 +14,8 @@
 module GameState where
 
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Default
-import qualified Data.List as List
 
 import Control.Lens
 
@@ -48,14 +48,17 @@ type OnlinePlayerName = String
 data NetworkFailureType = GameAnnouncementFailure String
                         | GameJoinRequestFailure String
                         | GameInitialSetupFailure String
+                        deriving Show
 data OnlineGameStatus = AwaitingPlayerTurn
                       | AwaitingOtherPlayerTurn
+                      deriving Show
 data NetworkRequest = GameAnnounce
                     | JoinGame
                     | GameStart
+                    deriving Show
 data NetworkEvent = Connection
                   | GameStarted
-data NetworkStatus = AwaitingEvent NetworkEvent
+                  deriving Show
 data NetworkStatus = AwaitingRequest
                    | AwaitingEvent NetworkEvent
                    | Request NetworkRequest
@@ -64,6 +67,7 @@ data NetworkStatus = AwaitingRequest
                    | EndingGame
                    | ShuttingDown
                    | NetworkFailure NetworkFailureType
+                   deriving Show
 
 data OnlineGameSettings = OnlineGameSettings { _gameCode        :: GameCode
                                              , _numberOfPlayers :: Int
@@ -101,22 +105,38 @@ instance Default GameState where
   def = GameState def [] []
 
 instance Show CardsOnTable where
-  show cs = List.intercalate "\n" [ "Red: "    ++ "\n\t" ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)
-                                  , "Yellow: " ++ "\n\t" ++ show (cs^.yellow._1.value) ++ ", " ++ show (cs^.yellow._2.value)
-                                  , "Blue: "   ++ "\n\t" ++ show (cs^.blue._1.value)   ++ ", " ++ show (cs^.blue._2.value)
-                                  , "Purple: " ++ "\n\t" ++ show (cs^.purple._1.value) ++ ", " ++ show (cs^.purple._2.value)
-                                  ]
+  show cs = unlines [ "Red:"
+                    , "    " ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)
+                    , "Yellow:"
+                    , "    " ++ show (cs^.yellow._1.value) ++ ", " ++ show (cs^.yellow._2.value)
+                    , "Blue:"
+                    , "    " ++ show (cs^.blue._1.value)   ++ ", " ++ show (cs^.blue._2.value)
+                    , "Purple:"
+                    , "    " ++ show (cs^.purple._1.value) ++ ", " ++ show (cs^.purple._2.value)
+                    ]
 
 instance Show GameState where
-  show gs = List.intercalate "\n" [ "Deck: "      ++ "\n" ++ "\t" ++ show (gs^.deck)
-                                  , "Players: "
-                                  ]
-         ++ "\n"
-         ++ List.intercalate "\n" (map (("\t"++) . show) (gs^.players))
-         ++ "\n"
-         ++ List.intercalate "\n" [ "Cards on table:"
-                                  , List.intercalate "\n" $ map ("\t"++) (lines (show $ gs^.cardsOnTable))
-                                  ]
+  show gs@(GameState {}) = unlines [ "Deck:"
+                                   , "   " ++ show (gs^.deck)
+                                   , "Players: "
+                                   ]
+                           ++ "\n"
+                           ++ unlines (map (("    "++) . show) (gs^.players))
+                           ++ "\n"
+                           ++ unlines [ "Cards on table:"
+                                      , unlines $ map ("    "++) (lines (show $ gs^.cardsOnTable))
+                                      ]
+  show gs@(OnlineGameState {}) = show (GameState (gs^.cardsOnTable) (gs^.deck) (gs^.players))
+                                 ++ unlines [ "Player IDs:"
+                                            , "    " <> show (Map.toList (gs^.playersIdentities))
+                                            , "NetworkStatus: "  <> show (gs^?!networkStatus)
+                                            , "GameSettings:"
+                                            , "    " <> " GameCode:        " <> gs^.gameSettings.gameCode
+                                            , "    " <> " NumberOfPlayers: " <> show (gs^?!gameSettings.numberOfPlayers)
+                                            , "GameHostID: " <> gs ^. gameHostID
+                                            , "MyID:       " <> gs ^. myID
+                                            , "MyName:     " <> gs ^. myName
+                                            ]
 
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ :: Int
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ = 6

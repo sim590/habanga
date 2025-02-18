@@ -99,10 +99,11 @@ executeCmd = do
       | cmd `elem` [ "pgs", "printGameState"  ] = printGameState
       | cmd `elem` [ "cl",  "clearLog"        ] = clearLog
       | otherwise     = logText %= (<>["err.. impossible d'exécuter cette commande!"])
-  logText %= (<>[">>> " <> cmdline])
-  exec
-  clearEditorInputText
-  M.vScrollToEnd logViewportScroll
+  unless (null cmdline) $ do
+    logText %= (<>[">>> " <> cmdline])
+    exec
+    M.vScrollToEnd logViewportScroll
+    clearEditorInputText
 
 appEvent :: BrickEvent AppFocus () -> EventM AppFocus NodeState ()
 appEvent ev = do

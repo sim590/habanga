@@ -56,6 +56,8 @@ data NetworkRequest = GameAnnounce
 data NetworkEvent = Connection
                   | GameStarted
 data NetworkStatus = AwaitingEvent NetworkEvent
+data NetworkStatus = AwaitingRequest
+                   | AwaitingEvent NetworkEvent
                    | Request NetworkRequest
                    | GameOnGoing OnlineGameStatus
                    | GameInitialization

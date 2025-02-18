@@ -48,7 +48,16 @@ common common-base
                         lens         ^>= 5.3.3,
                         mtl          ^>= 2.2.2,
                         containers   ^>= 0.6.7,
-                        data-default ^>= 0.8.0
+                        data-default ^>= 0.8.0,
+                        stm
+common common-exe
+    ghc-options:        -threaded
+
+common brick
+    build-depends:
+                        brick             ^>= 2.6,
+                        vty               ^>= 6.2,
+                        vty-crossplatform ^>= 0.4.0,
 
 library habanga-core
     import:             common-base,
@@ -60,24 +69,31 @@ library habanga-core
     build-depends:      random >= 1.2.1 && < 1.3,
                         opendht-hs,
                         serialise,
-                        bytestring,
-                        stm
+                        bytestring
     hs-source-dirs:     src/core
+
+executable habanga-node
+    import:             common-base,
+                        common-lang,
+                        common-exe,
+                        brick
+    main-is:            Main.hs
+    other-modules:      Node
+    build-depends:      habanga-core,
+    hs-source-dirs:     src/tools/node
 
 executable habanga-tui
     import:             common-base,
-                        common-lang
+                        common-lang,
+                        common-exe,
+                        brick
     main-is:            Main.hs
     other-modules:      ProgramState,
                         MainMenu,
                         GameView,
                         Widgets
     build-depends:      habanga-core,
-                        text              ^>= 2.0.2,
-                        brick             ^>= 2.6,
-                        vty               ^>= 6.2,
-                        vty-crossplatform ^>= 0.4.0,
-                        file-embed        ^>= 0.0.16
+                        text       ^>= 2.0.2,
+                        file-embed ^>= 0.0.16
     hs-source-dirs:     src/tui
-    ghc-options:        -threaded
 

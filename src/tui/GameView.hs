@@ -95,10 +95,10 @@ playCard rb = do
 
   let
     cardsDrawnLog = [">> " <> "pige " <> show (cardsDrawn^?!_Just) <> " carte(s)!" | ((>0) <$> cardsDrawn) == Just True]
-    playerLog     = List.intercalate "\n" $ [ "Joueur " <> currentPlayer^.name <> ": "
-                                            , ">> "     <> "a joué le " <> show (card^.value) <> " " <> cardColorStr <> "."
-                                            ] <> cardsDrawnLog
-                                              <> ["\n"]
+    playerLog     = unlines $ [ "Joueur " <> currentPlayer^.name <> ": "
+                              , ">> "     <> "a joué le " <> show (card^.value) <> " " <> cardColorStr <> "."
+                              ] <> cardsDrawnLog
+                                <> ["\n"]
   gameViewState . gameLog %= (:) playerLog
 
   theWinner <- Game.winner

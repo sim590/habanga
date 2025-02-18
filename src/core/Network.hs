@@ -221,7 +221,8 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
       requestToJoinGame (gs^?!gameSettings.gameCode) (gs^.myName) gsTV
     handleNS (Request GameAnnounce) = do
       gs <- liftIO $ readTVarIO gsTV
-      liftIO$ atomically $ modifyTVar gsTV (playersIdentities .~ Map.fromList [(gs^.myID, gs^.myName)])
+      liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & gameHostID        .~ gs' ^. myID
+                                                           & playersIdentities .~ Map.fromList [(gs'^.myID, gs'^.myName)]
       void $ announceGame (gs^?!gameSettings) gsTV
     handleNS (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen
     handleNS _ = return ()

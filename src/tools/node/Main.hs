@@ -66,11 +66,11 @@ executeCmd = do
   ie   <- use inputEditor
   gsTV <- use gameStateTV
   let
-    cmdline     = head $ E.getEditContents ie
-    cmdlineToks = words cmdline
-    cmd         = head cmdlineToks
-    args        = tail cmdlineToks
-    gameAnnounce = case args of
+    cmdline      = head $ E.getEditContents ie
+    cmdlineToks  = words cmdline
+    cmd          = head cmdlineToks
+    args         = tail cmdlineToks
+    announceGame = case args of
       [n, gc, playerName] -> do
         let mn = readMaybe n
         liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs
@@ -94,7 +94,7 @@ executeCmd = do
       logText %= (<> lines (show gs))
     exec
       | cmd == "aide"                            = focusRing %= F.focusSetCurrent HelpBox
-      | cmd `elem` [ "ga",  "gameAnnounce"    ] = gameAnnounce
+      | cmd `elem` [ "ag",  "announceGame"    ] = announceGame
       | cmd `elem` [ "rj",  "requestJoinGame" ] = requestJoinGame
       | cmd `elem` [ "pgs", "printGameState"  ] = printGameState
       | cmd `elem` [ "cl",  "clearLog"        ] = clearLog
@@ -140,8 +140,8 @@ drawUI ns = helpBox <> [mainUI]
                        [ "aide"
                        , "  Affiche l'aide de cet utilitaire."
                        , ""
-                       , "ga {n} {code} {nomHôte}"
-                       , "gameAnnounce {n} {code} {nomHôte}"
+                       , "ag {n} {code} {nomHôte}"
+                       , "announceGame {n} {code} {nomHôte}"
                        , "  Annonce une partie à {n} joueurs sur le réseau"
                        , "  avec un code {code} et un nom de joueur de"
                        , "  l'hôte {nomHôte}."

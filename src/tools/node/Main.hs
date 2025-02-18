@@ -98,6 +98,7 @@ executeCmd = do
       | cmd `elem` [ "rj",  "requestJoinGame" ] = requestJoinGame
       | cmd `elem` [ "pgs", "printGameState"  ] = printGameState
       | cmd `elem` [ "cl",  "clearLog"        ] = clearLog
+      | cmd `elem` [ "q",   "quit"            ] = M.halt
       | otherwise     = logText %= (<>["err.. impossible d'exécuter cette commande!"])
   unless (null cmdline) $ do
     logText %= (<>[">>> " <> cmdline])
@@ -108,7 +109,6 @@ executeCmd = do
 appEvent :: BrickEvent AppFocus () -> EventM AppFocus NodeState ()
 appEvent ev = do
   let
-    inputEvents (T.VtyEvent (V.EvKey V.KEsc []))               = M.halt
     inputEvents (T.VtyEvent (V.EvKey V.KEnter []))             = executeCmd
     inputEvents (T.VtyEvent (V.EvKey V.KPageUp []))            = M.vScrollPage logViewportScroll T.Up
     inputEvents (T.VtyEvent (V.EvKey V.KPageDown []))          = M.vScrollPage logViewportScroll T.Down
@@ -158,11 +158,15 @@ drawUI ns = helpBox <> [mainUI]
                        , "cl"
                        , "clearLog"
                        , "  Efface le contenu du journal."
+                       , ""
+                       , "q"
+                       , "quit"
+                       , "  Quitter le programme."
                        ]
     keybindsHelpText = B.borderWithLabel (str "TOUCHES") $ str $ unlines
                        [ "?:      Affiche l'aide de cet utilitaire."
                        , "CTRL-l: Efface le contenu du journal."
-                       , "ESC, q: Quitter la fenêtre / le programme."
+                       , "ESC, q: Quitter la fenêtre."
                        ]
     helpBox      = case F.focusGetCurrent (ns ^. focusRing) of
                      Just HelpBox -> [ C.centerLayer $ hLimit 60 $ vBox [ C.hCenter cmdsHelpText

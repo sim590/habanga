@@ -270,7 +270,7 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
       gs <- liftIO $ readTVarIO gsTV
       clearPendingDhtOps
       liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ GameInitialization
-    handleNS (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen
+    handleNS (NetworkFailure (GameAnnouncementFailure msg)) = clearPendingDhtOps
     handleNS _ = return ()
 
 loop :: (MonadIO m, MonadReader (TVar GameState) m) => DhtRunnerConfig -> m ()

@@ -47,7 +47,7 @@ type OnlinePlayerName = String
 
 data NetworkFailureType = GameAnnouncementFailure String
                         | GameJoinRequestFailure String
-                        | GameInitialSetupFailure String
+                        | ShareGameSetupFailure String
                         deriving Show
 data OnlineGameStatus = AwaitingPlayerTurn
                       | AwaitingOtherPlayerTurn

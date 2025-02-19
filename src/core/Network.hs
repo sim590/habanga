@@ -127,7 +127,7 @@ shareGameSetup gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
                                       }
     onDone False gs' = gs' & networkStatus .~ newNetworkStatusIfNotFail failure gs'
       where
-        failure = NetworkFailure (GameJoinRequestFailure "network: échec de l'envoi d'une requête pour partager la config de la partie.")
+        failure = NetworkFailure (ShareGameSetupFailure "network: échec de l'envoi d'une requête pour partager la config de la partie.")
     onDone _ gs'     = gs'
     doneCb success  = atomically $ modifyTVar gsTV $ onDone success
   liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & networkStatus .~ newNetworkStatusIfNotFail SetupPhaseDone gs'
@@ -158,8 +158,8 @@ gameJoinRequestCb myId gsTV (StoredValue d _ _ _ utype) False
                                   & gameSettings . numberOfPlayers .~ length playersIds
                                   & networkStatus                  .~ networkStatus'
         networkStatus'
-          | not (Map.member myId' playersIds) = NetworkFailure $ GameInitialSetupFailure ourIdNotFoundFailureMsg
-          | not (Map.member sId' playersIds)  = NetworkFailure $ GameInitialSetupFailure hostIdNotFoundFairureMsg
+          | not (Map.member myId' playersIds) = NetworkFailure $ GameJoinRequestFailure ourIdNotFoundFailureMsg
+          | not (Map.member sId' playersIds)  = NetworkFailure $ GameJoinRequestFailure hostIdNotFoundFairureMsg
           | otherwise                         = case currentNetworkStatus of
             GameInitialization -> currentNetworkStatus
             _                  -> newNetworkStatusIfNotFail SetupPhaseDone gs

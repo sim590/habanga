@@ -267,9 +267,14 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
       void $ announceGame (gs^?!gameSettings) gsTV
     handleNS SharingGameSetup   = shareGameSetup gsTV
     handleNS SetupPhaseDone = do
-      gs <- liftIO $ readTVarIO gsTV
       clearPendingDhtOps
       liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ GameInitialization
+    handleNS (Request ResetNetwork) = do
+      clearPendingDhtOps
+      liftIO $ atomically $ modifyTVar gsTV $ \ gs -> defaultOnlineGameState
+        & networkStatus .~ AwaitingRequest
+        & myID          .~ gs ^. myID
+        & myName        .~ gs ^. myName
     handleNS (NetworkFailure (GameAnnouncementFailure msg)) = clearPendingDhtOps
     handleNS _ = return ()
 

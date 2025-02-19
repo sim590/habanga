@@ -55,6 +55,7 @@ data OnlineGameStatus = AwaitingPlayerTurn
 data NetworkRequest = GameAnnounce
                     | JoinGame
                     | GameStart
+                    | ResetNetwork
                     deriving Show
 data NetworkEvent = Connection
                   | GameStarted

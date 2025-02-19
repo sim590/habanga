@@ -275,7 +275,7 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
         & networkStatus .~ AwaitingRequest
         & myID          .~ gs ^. myID
         & myName        .~ gs ^. myName
-    handleNS (NetworkFailure (GameAnnouncementFailure msg)) = clearPendingDhtOps
+    handleNS (NetworkFailure (GameAnnouncementFailure _)) = clearPendingDhtOps
     handleNS _ = return ()
 
 loop :: (MonadIO m, MonadReader (TVar GameState) m) => DhtRunnerConfig -> m ()

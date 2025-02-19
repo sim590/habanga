@@ -80,23 +80,14 @@ executeCmd = do
     args         = tail cmdlineToks
     announceGame = case args of
       [n, gc, playerName] -> do
-        let mn = readMaybe n
-        liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs
-          & networkStatus                .~ Request GameAnnounce
-          & myName                       .~ playerName
-          -- TODO: ne pas utiliser gameSettings, mais passer directement gamecode et numberOfPlayers à (Request GameAnnounce ...)
-          & gameSettings.gameCode        .~ gc
-          & gameSettings.numberOfPlayers .~ fromMaybe 0 mn
+        let mn              = readMaybe n
+            theGameSettings = OnlineGameSettings gc (fromMaybe 0 mn)
+        liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request (GameAnnounce theGameSettings playerName)
         when (isNothing mn) $ logText %= (<>["oops! Le nombre de joueurs '" <> n <> "' n'a pas pu être résolu à un entier!"])
       _ -> return ()
     requestJoinGame = case args of
-      [gc, playerName] -> do
-        liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs
-          & networkStatus                .~ Request JoinGame
-          & myName                       .~ playerName
-          -- TODO: ne pas utiliser gameSettings, mais passer directement gamecode à (Request GameAnnounce ...)
-          & gameSettings.gameCode        .~ gc
-      _ -> return ()
+      [gc, playerName] -> liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request (JoinGame gc playerName)
+      _                -> return ()
     resetNetwork = liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request ResetNetwork
     printGameState = do
       gs <- liftIO $ readTVarIO gsTV

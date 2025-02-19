@@ -257,14 +257,16 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
       gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
       clearPermanentPutRequests gcHash
       clearListenRequests
-    handleNS (Request JoinGame) = do
-      gs <- liftIO $ readTVarIO gsTV
-      requestToJoinGame (gs^?!gameSettings.gameCode) (gs^.myName) gsTV
-    handleNS (Request GameAnnounce) = do
-      gs <- liftIO $ readTVarIO gsTV
-      liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & gameHostID        .~ gs' ^. myID
-                                                           & playersIdentities .~ Map.fromList [(gs'^.myID, gs'^.myName)]
-      void $ announceGame (gs^?!gameSettings) gsTV
+    handleNS (Request (JoinGame gc myname)) = do
+      liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & gameSettings.gameCode .~ gc
+                                                           & myName                .~ myname
+      requestToJoinGame gc myname gsTV
+    handleNS (Request (GameAnnounce theGameSettings myname)) = do
+      liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & gameSettings      .~ theGameSettings
+                                                           & gameHostID        .~ gs' ^. myID
+                                                           & myName            .~ myname
+                                                           & playersIdentities .~ Map.fromList [(gs'^.myID, myname)]
+      void $ announceGame theGameSettings gsTV
     handleNS SharingGameSetup   = shareGameSetup gsTV
     handleNS SetupPhaseDone = do
       clearPendingDhtOps

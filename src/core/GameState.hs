@@ -52,8 +52,8 @@ data NetworkFailureType = GameAnnouncementFailure String
 data OnlineGameStatus = AwaitingPlayerTurn
                       | AwaitingOtherPlayerTurn
                       deriving Show
-data NetworkRequest = GameAnnounce
-                    | JoinGame
+data NetworkRequest = GameAnnounce OnlineGameSettings String
+                    | JoinGame GameCode String
                     | GameStart
                     | ResetNetwork
                     deriving Show
@@ -75,6 +75,7 @@ data NetworkStatus = AwaitingRequest
 data OnlineGameSettings = OnlineGameSettings { _gameCode        :: GameCode
                                              , _numberOfPlayers :: Int
                                              }
+                                             deriving Show
 makeLenses ''OnlineGameSettings
 
 data GameState = GameState { _cardsOnTable :: CardsOnTable

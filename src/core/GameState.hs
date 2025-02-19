@@ -62,7 +62,7 @@ data NetworkEvent = Connection
 data NetworkStatus = AwaitingRequest
                    | AwaitingEvent NetworkEvent
                    | Request NetworkRequest
-                   | GameOnGoing OnlineGameStatus
+                   | SharingGameSetup
                    | GameInitialization
                    | EndingGame
                    | ShuttingDown

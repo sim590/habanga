@@ -102,6 +102,24 @@ newNetworkStatusIfNotFail ns gs = let currentNetworkStatus = gs ^?! networkStatu
   NetworkFailure {} -> currentNetworkStatus
   _                 -> ns
 
+shareGameSetup :: TVar GameState -> DhtRunnerM Dht ()
+shareGameSetup gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
+  gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+  let
+    packet               = HabangaPacket { _senderID = gs ^. myID
+                                         , _content  = GameSetup $ gs ^. playersIdentities
+                                         }
+    gameJoinRequestValue = InputValue { _valueData     = BS.toStrict $ serialise packet
+                                      , _valueUserType = _GAME_SETUP_UTYPE_
+                                      }
+    onDone False gs' = gs' & networkStatus .~ newNetworkStatusIfNotFail failure gs'
+      where
+        failure = NetworkFailure (GameJoinRequestFailure "network: échec de l'envoi d'une requête pour partager la config de la partie.")
+    onDone _ gs'     = gs'
+    doneCb success  = atomically $ modifyTVar gsTV $ onDone success
+  liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & networkStatus .~ newNetworkStatusIfNotFail GameInitialization gs'
+  void $ DhtRunner.put gcHash gameJoinRequestValue doneCb False
+
 gameJoinRequestCb :: String -> TVar GameState -> ValueCallback
 gameJoinRequestCb _    _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
 gameJoinRequestCb _    _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
@@ -229,6 +247,7 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
       liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & gameHostID        .~ gs' ^. myID
                                                            & playersIdentities .~ Map.fromList [(gs'^.myID, gs'^.myName)]
       void $ announceGame (gs^?!gameSettings) gsTV
+    handleNS SharingGameSetup   = shareGameSetup gsTV
     handleNS (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen
     handleNS _ = return ()
 

@@ -98,13 +98,15 @@ executeCmd = do
           -- TODO: ne pas utiliser gameSettings, mais passer directement gamecode à (Request GameAnnounce ...)
           & gameSettings.gameCode        .~ gc
       _ -> return ()
+    resetNetwork = liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request ResetNetwork
     printGameState = do
       gs <- liftIO $ readTVarIO gsTV
       logText %= (<> lines (show gs))
     exec
-      | cmd == "aide"                            = focusRing %= F.focusSetCurrent HelpBox
+      | cmd == "aide"                           = focusRing %= F.focusSetCurrent HelpBox
       | cmd `elem` [ "ag",  "announceGame"    ] = announceGame
       | cmd `elem` [ "rj",  "requestJoinGame" ] = requestJoinGame
+      | cmd `elem` [ "rs",  "resetNetwork"    ] = resetNetwork
       | cmd `elem` [ "pgs", "printGameState"  ] = printGameState
       | cmd `elem` [ "cl",  "clearLog"        ] = clearLog
       | cmd `elem` [ "q",   "quit"            ] = M.halt
@@ -159,6 +161,10 @@ drawUI ns = helpBox <> [mainUI]
                        , "requestJoinGame {code} {nomJoueur}"
                        , "  Demande d'accéder à la partie en tant que {nomJoueur}"
                        , "  en utilisant le code {code}."
+                       , ""
+                       , "rs"
+                       , "resetNetwork"
+                       , "  Réinitialisation du réseau et de l'état du jeu."
                        , ""
                        , "pgs"
                        , "printGameState"

@@ -55,6 +55,7 @@ library habanga-core
     exposed-modules:    Game
                         Cards
                         GameState
+                        Random
     build-depends:      random >= 1.2.1 && < 1.3
     hs-source-dirs:     src/core
 

@@ -90,6 +90,9 @@ _GAME_JOIN_REQUEST_UTYPE_ = show $ toConstr $ GameJoinRequest ""
 _GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ :: String
 _GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ = show $ toConstr GameJoinRequestAccepted
 
+_GAME_SETUP_UTYPE_ :: String
+_GAME_SETUP_UTYPE_ = show $ toConstr $ GameSetup mempty
+
 -- TODO:
 shutdownCb :: ShutdownCallback
 shutdownCb = return ()
@@ -104,40 +107,41 @@ gameJoinRequestCb _    _    (InputValue {})             _    = error $ opendhtWr
 gameJoinRequestCb _    _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
 gameJoinRequestCb _    _    (StoredValue {})            True = return True
 gameJoinRequestCb myId gsTV (StoredValue d _ _ _ utype) False
-  | utype == _GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ = do
-    let
-      treatPacket (HabangaPacket sId (GameSetup playersIds)) gs = (True, gs')
-        where
-          sId'                 = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
-          myId'                = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ myId
-          currentNetworkStatus = gs ^?! networkStatus
-          gs'                  = gs
-                                    & playersIdentities              .~ playersIds
-                                    & gameHostID                     .~ sId'
-                                    & gameSettings . numberOfPlayers .~ length playersIds
-                                    & networkStatus                  .~ networkStatus'
-          networkStatus'
-            | not (Map.member myId' playersIds) = NetworkFailure $ GameInitialSetupFailure ourIdNotFoundFailureMsg
-            | not (Map.member sId' playersIds)  = NetworkFailure $ GameInitialSetupFailure hostIdNotFoundFairureMsg
-            | otherwise                         = case currentNetworkStatus of
-              GameInitialization -> currentNetworkStatus
-              _                  -> newNetworkStatusIfNotFail GameInitialization gs
-      treatPacket (HabangaPacket sId GameJoinRequestAccepted) gs = (True, gsWithGameHostID)
-        where
-          sId'             = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
-          gsWithGameHostID = gs
-                                & gameHostID    .~ sId'
-                                & networkStatus .~ newNetworkStatusIfNotFail (AwaitingEvent GameStarted) gs
-      treatPacket _ gs = (True, gs)
+  | utype == _GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ = deserialiseAndTreatPacket
+  | utype == _GAME_SETUP_UTYPE_                 = deserialiseAndTreatPacket
+  | otherwise                                   = return True
+  where
+    deserialiseAndTreatPacket = do
+      eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
+      case eitherHabangaPacketOrFail of
+        Left (DeserialiseFailure {}) -> return True
+        Right habangaPacket          -> atomically $ stateTVar gsTV $ treatPacket habangaPacket
+    treatPacket (HabangaPacket sId (GameSetup playersIds)) gs = (True, gs')
+      where
+        sId'                 = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
+        myId'                = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ myId
+        currentNetworkStatus = gs ^?! networkStatus
+        gs'                  = gs
+                                  & playersIdentities              .~ playersIds
+                                  & gameHostID                     .~ sId'
+                                  & gameSettings . numberOfPlayers .~ length playersIds
+                                  & networkStatus                  .~ networkStatus'
+        networkStatus'
+          | not (Map.member myId' playersIds) = NetworkFailure $ GameInitialSetupFailure ourIdNotFoundFailureMsg
+          | not (Map.member sId' playersIds)  = NetworkFailure $ GameInitialSetupFailure hostIdNotFoundFairureMsg
+          | otherwise                         = case currentNetworkStatus of
+            GameInitialization -> currentNetworkStatus
+            _                  -> newNetworkStatusIfNotFail GameInitialization gs
+    treatPacket (HabangaPacket sId GameJoinRequestAccepted) gs = (True, gsWithGameHostID)
+      where
+        sId'             = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
+        gsWithGameHostID = gs
+                              & gameHostID    .~ sId'
+                              & networkStatus .~ newNetworkStatusIfNotFail (AwaitingEvent GameStarted) gs
+    treatPacket _ gs = (True, gs)
+    ourIdNotFoundFailureMsg  = "network: on a reçu un paquet GameSetup, mais notre ID n'était pas dans la liste."
+    hostIdNotFoundFairureMsg = "network: on a reçu un paquet GameSetup, mais l'ID de l'hôte n'était pas dans la liste."
 
-      ourIdNotFoundFailureMsg  = "network: on a reçu un paquet GameSetup, mais notre ID n'était pas dans la liste."
-      hostIdNotFoundFairureMsg = "network: on a reçu un paquet GameSetup, mais l'ID de l'hôte n'était pas dans la liste."
-
-    eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
-    case eitherHabangaPacketOrFail of
-      Left (DeserialiseFailure {}) -> return True
-      Right habangaPacket          -> atomically $ stateTVar gsTV $ treatPacket habangaPacket
-  | otherwise = return True
 
 requestToJoinGame :: GameCode -> String -> TVar GameState -> DhtRunnerM Dht ()
 requestToJoinGame gc playerName gsTV = liftIO (readTVarIO gsTV) >>= \ initialGameState -> do
@@ -163,29 +167,30 @@ gameAnnounceCb _                  _    (InputValue {})             _    = error 
 gameAnnounceCb _                  _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
 gameAnnounceCb _                  _    (StoredValue {})            True = return True
 gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) False
-  | utype == _GAME_JOIN_REQUEST_UTYPE_ = do
-    let
-      treatPacket (HabangaPacket sId (GameJoinRequest pName)) gs =
-        let sId' = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
-            gs'  = gs
-                      & playersIdentities %~ Map.insert sId' pName
-                      & networkStatus     .~ networkStatus'
-            networkStatus'
-              | not stillHasSpaceForOtherPlayers = newNetworkStatusIfNotFail (AwaitingEvent GameStarted) gs
-              | otherwise                        = gs ^?! networkStatus
-            stillHasSpaceForOtherPlayers = length (gs'^.playersIdentities) < maxNumberOfPlayers
-         in case Map.lookup sId' (gs^.playersIdentities) of
-              Just _  -> (True, gs)
-              Nothing -> (stillHasSpaceForOtherPlayers, gs')
-      treatPacket _ gs = (True, gs)
+  | utype == _GAME_JOIN_REQUEST_UTYPE_ = deserialiseAndTreatPacket
+  | otherwise                          = return True
+  where
+    treatPacket (HabangaPacket sId (GameJoinRequest pName)) gs =
+      let sId' = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
+          gs'  = gs
+                    & playersIdentities %~ Map.insert sId' pName
+                    & networkStatus     .~ networkStatus'
+          networkStatus'
+            | not stillHasSpaceForOtherPlayers = newNetworkStatusIfNotFail SharingGameSetup gs
+            | otherwise                        = gs ^?! networkStatus
+          stillHasSpaceForOtherPlayers = length (gs'^.playersIdentities) < maxNumberOfPlayers
+       in case Map.lookup sId' (gs^.playersIdentities) of
+            Just _  -> (True, gs)
+            Nothing -> (stillHasSpaceForOtherPlayers, gs')
+    treatPacket _ gs = (True, gs)
 
-    eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
-    case eitherHabangaPacketOrFail of
-      Left (DeserialiseFailure {}) -> return True
-      Right habangaPacket                     -> atomically $ stateTVar gsTV $ \ gs ->
-        if length (gs^.playersIdentities) < maxNumberOfPlayers then treatPacket habangaPacket gs
-                                                               else (False, gs)
-  | otherwise = return True
+    deserialiseAndTreatPacket = do
+      eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
+      case eitherHabangaPacketOrFail of
+        Left (DeserialiseFailure {}) -> return True
+        Right habangaPacket                     -> atomically $ stateTVar gsTV $ \ gs ->
+          if length (gs^.playersIdentities) < maxNumberOfPlayers then treatPacket habangaPacket gs
+                                                                 else (False, gs)
 
 announceGame :: OnlineGameSettings -> TVar GameState -> DhtRunnerM Dht OpToken
 announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = liftIO (readTVarIO gsTV) >>= \ initialGameState -> do

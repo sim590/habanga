@@ -206,7 +206,7 @@ gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) False
       eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
       case eitherHabangaPacketOrFail of
         Left (DeserialiseFailure {}) -> return True
-        Right habangaPacket                     -> atomically $ stateTVar gsTV $ \ gs ->
+        Right habangaPacket          -> atomically $ stateTVar gsTV $ \ gs ->
           if length (gs^.playersIdentities) < maxNumberOfPlayers then treatPacket habangaPacket gs
                                                                  else (False, gs)
 

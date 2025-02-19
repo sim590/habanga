@@ -64,6 +64,7 @@ data NetworkStatus = AwaitingRequest
                    | Request NetworkRequest
                    | SharingGameSetup
                    | GameInitialization
+                   | GameOnGoing OnlineGameStatus
                    | EndingGame
                    | ShuttingDown
                    | NetworkFailure NetworkFailureType

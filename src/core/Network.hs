@@ -130,7 +130,7 @@ shareGameSetup gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
         failure = NetworkFailure (GameJoinRequestFailure "network: échec de l'envoi d'une requête pour partager la config de la partie.")
     onDone _ gs'     = gs'
     doneCb success  = atomically $ modifyTVar gsTV $ onDone success
-  liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & networkStatus .~ newNetworkStatusIfNotFail GameInitialization gs'
+  liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & networkStatus .~ newNetworkStatusIfNotFail SetupPhaseDone gs'
   void $ DhtRunner.put gcHash gameJoinRequestValue doneCb False
 
 gameJoinRequestCb :: String -> TVar GameState -> ValueCallback
@@ -162,7 +162,7 @@ gameJoinRequestCb myId gsTV (StoredValue d _ _ _ utype) False
           | not (Map.member sId' playersIds)  = NetworkFailure $ GameInitialSetupFailure hostIdNotFoundFairureMsg
           | otherwise                         = case currentNetworkStatus of
             GameInitialization -> currentNetworkStatus
-            _                  -> newNetworkStatusIfNotFail GameInitialization gs
+            _                  -> newNetworkStatusIfNotFail SetupPhaseDone gs
     treatPacket (HabangaPacket sId GameJoinRequestAccepted) gs = (True, gsWithGameHostID)
       where
         sId'             = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
@@ -252,6 +252,11 @@ handleNetworkStatus :: TVar GameState -> NetworkStatus -> DhtRunnerM Dht Bool
 handleNetworkStatus _ ShuttingDown = return False
 handleNetworkStatus gsTV status    = handleNS status >> return True
   where
+    clearPendingDhtOps = do
+      gs <- liftIO $ readTVarIO gsTV
+      gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+      clearPermanentPutRequests gcHash
+      clearListenRequests
     handleNS (Request JoinGame) = do
       gs <- liftIO $ readTVarIO gsTV
       requestToJoinGame (gs^?!gameSettings.gameCode) (gs^.myName) gsTV
@@ -261,12 +266,10 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
                                                            & playersIdentities .~ Map.fromList [(gs'^.myID, gs'^.myName)]
       void $ announceGame (gs^?!gameSettings) gsTV
     handleNS SharingGameSetup   = shareGameSetup gsTV
-    handleNS GameInitialization = do
+    handleNS SetupPhaseDone = do
       gs <- liftIO $ readTVarIO gsTV
-      gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
-      clearPermanentPutRequests gcHash
-      clearListenRequests
-
+      clearPendingDhtOps
+      liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ GameInitialization
     handleNS (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen
     handleNS _ = return ()
 

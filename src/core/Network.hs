@@ -35,6 +35,7 @@ import Control.Exception
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad.Trans
+import Control.Monad.Trans.Maybe
 import Control.Monad.Reader
 import Control.Lens
 
@@ -96,6 +97,18 @@ _GAME_SETUP_UTYPE_ = show $ toConstr $ GameSetup mempty
 -- TODO:
 shutdownCb :: ShutdownCallback
 shutdownCb = return ()
+
+clearPermanentPutRequests :: InfoHash -> DhtRunnerM Dht ()
+clearPermanentPutRequests h = do
+  values <- DhtRunner.getPermanentMetaValues
+  forM_ values $ \ v -> DhtRunner.cancelPut h (_valueId v)
+
+clearListenRequests :: DhtRunnerM Dht ()
+clearListenRequests = do
+  tokenMap <- DhtRunner.getListenTokens
+  forM_ (Map.toList tokenMap) $ \ (h, tokens) ->
+    forM_ tokens $ \ t ->
+      runMaybeT (DhtRunner.cancelListen h t)
 
 newNetworkStatusIfNotFail :: NetworkStatus -> GameState -> NetworkStatus
 newNetworkStatusIfNotFail ns gs = let currentNetworkStatus = gs ^?! networkStatus in case currentNetworkStatus of
@@ -248,6 +261,12 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
                                                            & playersIdentities .~ Map.fromList [(gs'^.myID, gs'^.myName)]
       void $ announceGame (gs^?!gameSettings) gsTV
     handleNS SharingGameSetup   = shareGameSetup gsTV
+    handleNS GameInitialization = do
+      gs <- liftIO $ readTVarIO gsTV
+      gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+      clearPermanentPutRequests gcHash
+      clearListenRequests
+
     handleNS (NetworkFailure (GameAnnouncementFailure msg)) = undefined -- TODO: annuler tous les puts/listen
     handleNS _ = return ()
 

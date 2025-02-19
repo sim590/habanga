@@ -58,11 +58,12 @@ initialize playerNames = do
 -}
 endPlayerTurn :: (MonadState s m, GameStated s) => m ()
 endPlayerTurn = do
-  let cycleAround (p:others) = others ++ [p]
-      cycleAround [] = error "endPlayerTurn: aucun joueur!"
-      sortByColor  = List.sortBy (\ c0 c1 -> compare (c0^.color) (c1^.color))
-      groupByColor = List.groupBy (\ c0 c1 -> c0^.color == c1^.color)
-      sortByColorThenValues = concat . over traverse List.sort . groupByColor . sortByColor
+  let
+    cycleAround (p:others) = others ++ [p]
+    cycleAround []         = error "endPlayerTurn: aucun joueur!"
+    sortByColor            = List.sortBy (\ c0 c1 -> compare (c0^.color) (c1^.color))
+    groupByColor           = List.groupBy (\ c0 c1 -> c0^.color == c1^.color)
+    sortByColorThenValues  = concat . over traverse List.sort . groupByColor . sortByColor
   gameStateLens . players . _head . cardsInHand %= sortByColorThenValues
   gameStateLens . players %= cycleAround
 
@@ -94,9 +95,7 @@ winner = do
 
    La fonction retourne le nombre de cartes pigées par le joueur à la fin de son tour.
 -}
--- TODO: de façon à utiliser TVar
--- processPlayerTurnAction
---   :: (MonadIO m, MonadState s m, GameStated s)
+
 processPlayerTurnAction
   :: (MonadState s m, GameStated s)
   => Card          -- ^ La carte jouée par le joueur.
@@ -115,15 +114,15 @@ processPlayerTurnAction card side = do
   (gameStateLens . players . _head . cardsInHand) %= List.delete card
 
   let boundaryLens = case side of
-                       LeftBoundary  -> _1
-                       RightBoundary -> _2
+       LeftBoundary  -> _1
+       RightBoundary -> _2
 
   let colorLens c = case c^.color of
-                      Just Red    -> red
-                      Just Yellow -> yellow
-                      Just Blue   -> blue
-                      Just Purple -> purple
-                      Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
+        Just Red    -> red
+        Just Yellow -> yellow
+        Just Blue   -> blue
+        Just Purple -> purple
+        Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
 
 
   gameStateLens . cardsOnTable . colorLens card . boundaryLens .= card

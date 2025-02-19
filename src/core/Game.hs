@@ -11,7 +11,8 @@
   des mécanismes de jeu devrait être écrit sous ce module.
 -}
 
-module Game ( initialize
+module Game ( initializeIO
+            , initialize
             , winner
             , processPlayerTurnAction
             , RangeBoundary (..)
@@ -24,11 +25,18 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.State
 import Control.Lens
 
+import System.Random
+
 import Random
 import Cards
 import GameState
 
 data RangeBoundary = LeftBoundary | RightBoundary
+
+initializeIO
+  :: [String]     -- ^ Les noms des différents joueurs.
+  -> IO GameState -- ^ L'état du jeu résutlant
+initializeIO playerNames = getStdGen >>= initialize playerNames
 
 {-| Fait l'initialisation de l'état du jeu.
 
@@ -38,16 +46,19 @@ data RangeBoundary = LeftBoundary | RightBoundary
   performant des tirages de carte depuis le paquet de carte.
 -}
 initialize
-  :: [String] -- ^ Les noms des différents joueurs.
+  :: RandomGen gen
+  => [String] -- ^ Les noms des différents joueurs.
+  -> gen
   -> IO GameState
-initialize playerNames = do
-  startingRangesCardsShuffled <- shuffle startingRangesCardList
-  let theCardsOnTable     = CardsOnTable (startingRangesCardsShuffled !! 0, startingRangesCardsShuffled !! 1)
-                                         (startingRangesCardsShuffled !! 2, startingRangesCardsShuffled !! 3)
-                                         (startingRangesCardsShuffled !! 4, startingRangesCardsShuffled !! 5)
-                                         (startingRangesCardsShuffled !! 6, startingRangesCardsShuffled !! 7)
-      initialPlayerStates = map (\ n -> PlayerState n [] Nothing) playerNames
-  shuffledDeck <- shuffle unshuffledDeck
+initialize playerNames gen = do
+  let
+    theCardsOnTable             = CardsOnTable (startingRangesCardsShuffled !! 0, startingRangesCardsShuffled !! 1)
+                                               (startingRangesCardsShuffled !! 2, startingRangesCardsShuffled !! 3)
+                                               (startingRangesCardsShuffled !! 4, startingRangesCardsShuffled !! 5)
+                                               (startingRangesCardsShuffled !! 6, startingRangesCardsShuffled !! 7)
+    startingRangesCardsShuffled = deterministiclyShuffle startingRangesCardList gen
+    shuffledDeck                = deterministiclyShuffle unshuffledDeck gen
+    initialPlayerStates         = map (\ n -> PlayerState n [] Nothing) playerNames
 
   let initialGameState = GameState theCardsOnTable shuffledDeck initialPlayerStates
   flip execStateT initialGameState $ replicateM_ (length playerNames) $ do

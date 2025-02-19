@@ -81,6 +81,7 @@ executable habanga-node
     main-is:            Main.hs
     other-modules:      Node
     build-depends:      habanga-core,
+                        random
     hs-source-dirs:     src/tools/node
 
 executable habanga-tui

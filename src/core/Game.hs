@@ -13,6 +13,7 @@
 
 module Game ( initializeIO
             , initialize
+            , reInitialize
             , winner
             , processPlayerTurnAction
             , RangeBoundary (..)
@@ -64,6 +65,12 @@ initialize playerNames gen = do
   flip execStateT initialGameState $ replicateM_ (length playerNames) $ do
     drawCards 8
     endPlayerTurn
+
+reInitialize :: RandomGen gen => [String] -> GameState -> gen -> IO GameState
+reInitialize playerNames gs gen = initialize playerNames gen >>= \ gs' -> return $ gs
+  & cardsOnTable .~ gs' ^. cardsOnTable
+  & deck         .~ gs' ^. deck
+  & players      .~ gs' ^. players
 
 {-| Exécute toute les actions nécessaires lors de la terminaison du tour
    du joueur.

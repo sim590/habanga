@@ -20,7 +20,6 @@ import Text.Read
 
 import Control.Monad
 import Control.Monad.Reader
-import Control.Monad.Trans
 import Control.Lens
 import Control.Concurrent
 import Control.Concurrent.STM

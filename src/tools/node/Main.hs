@@ -1,4 +1,13 @@
 
+{-|
+  Module      : Main
+  Description : Point d'entrée de l'outil habanga-node
+  Copyright   : (c) Simon Désaulniers, 2025
+  License     : GPL-3
+
+  Maintainer  : sim.desaulniers@gmail.com
+-}
+
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 

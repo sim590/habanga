@@ -24,6 +24,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.State
 import Control.Lens
 
+import Random
 import Cards
 import GameState
 
@@ -40,13 +41,13 @@ initialize
   :: [String] -- ^ Les noms des différents joueurs.
   -> IO GameState
 initialize playerNames = do
-  startingRangesCardsShuffled <- shuffleCards startingRangesCardList
+  startingRangesCardsShuffled <- shuffle startingRangesCardList
   let theCardsOnTable     = CardsOnTable (startingRangesCardsShuffled !! 0, startingRangesCardsShuffled !! 1)
                                          (startingRangesCardsShuffled !! 2, startingRangesCardsShuffled !! 3)
                                          (startingRangesCardsShuffled !! 4, startingRangesCardsShuffled !! 5)
                                          (startingRangesCardsShuffled !! 6, startingRangesCardsShuffled !! 7)
       initialPlayerStates = map (\ n -> PlayerState n [] Nothing) playerNames
-  shuffledDeck <- shuffleCards unshuffledDeck
+  shuffledDeck <- shuffle unshuffledDeck
 
   let initialGameState = GameState theCardsOnTable shuffledDeck initialPlayerStates
   flip execStateT initialGameState $ replicateM_ (length playerNames) $ do

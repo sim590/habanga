@@ -13,16 +13,22 @@
 
 module Main where
 
+import qualified Data.List as List
 import Data.Default
 import Data.Maybe
+import qualified Data.Map as Map
 
 import Text.Read
+
+import Numeric
 
 import Control.Monad
 import Control.Monad.Reader
 import Control.Lens
 import Control.Concurrent
 import Control.Concurrent.STM
+
+import System.Random
 
 import Brick.AttrMap
 import Brick.Types ( BrickEvent
@@ -46,8 +52,10 @@ import qualified Brick.Focus as F
 import Graphics.Vty (defAttr)
 import qualified Graphics.Vty as V
 
-import Network
+import Random
+import Game
 import GameState
+import Network
 
 data AppFocus = Input
               | Log
@@ -88,6 +96,14 @@ executeCmd = do
     requestJoinGame = case args of
       [gc, playerName] -> liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request (JoinGame gc playerName)
       _                -> return ()
+    startGame = liftIO $ do
+      gs <- readTVarIO gsTV
+      let
+        sortedPlayerNames   = List.sort $ Map.elems $ gs ^. playersIdentities
+        gen                 = mkStdGen (fst $ head $ readHex $ gs^.gameSettings.gameCode)
+        shuffledPlayerNames = deterministiclyShuffle sortedPlayerNames gen
+      gs' <- reInitialize shuffledPlayerNames gs gen
+      atomically $ modifyTVar gsTV $ const gs'
     resetNetwork = liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request ResetNetwork
     printGameState = do
       gs <- liftIO $ readTVarIO gsTV
@@ -96,6 +112,7 @@ executeCmd = do
       | cmd == "aide"                           = focusRing %= F.focusSetCurrent HelpBox
       | cmd `elem` [ "ag",  "announceGame"    ] = announceGame
       | cmd `elem` [ "rj",  "requestJoinGame" ] = requestJoinGame
+      | cmd `elem` [ "sg",  "startGame"       ] = startGame
       | cmd `elem` [ "rs",  "resetNetwork"    ] = resetNetwork
       | cmd `elem` [ "pgs", "printGameState"  ] = printGameState
       | cmd `elem` [ "cl",  "clearLog"        ] = clearLog
@@ -151,6 +168,10 @@ drawUI ns = helpBox <> [mainUI]
                        , "requestJoinGame {code} {nomJoueur}"
                        , "  Demande d'accéder à la partie en tant que {nomJoueur}"
                        , "  en utilisant le code {code}."
+                       , ""
+                       , "sg"
+                       , "startGame"
+                       , "  Initialise l'état du jeu et prépare la couche réseau."
                        , ""
                        , "rs"
                        , "resetNetwork"

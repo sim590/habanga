@@ -161,8 +161,8 @@ gameJoinRequestCb myId gsTV (StoredValue d _ _ _ utype) False
           | not (Map.member myId' playersIds) = NetworkFailure $ GameJoinRequestFailure ourIdNotFoundFailureMsg
           | not (Map.member sId' playersIds)  = NetworkFailure $ GameJoinRequestFailure hostIdNotFoundFairureMsg
           | otherwise                         = case currentNetworkStatus of
-            GameInitialization -> currentNetworkStatus
-            _                  -> newNetworkStatusIfNotFail SetupPhaseDone gs
+            SetupPhaseDone -> currentNetworkStatus
+            _              -> newNetworkStatusIfNotFail SetupPhaseDone gs
     treatPacket (HabangaPacket sId GameJoinRequestAccepted) gs = (True, gsWithGameHostID)
       where
         sId'             = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId

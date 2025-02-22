@@ -205,9 +205,9 @@ gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) False
       let sId' = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
           gs'  = gs
                     & playersIdentities %~ Map.insert sId' pName
-                    & networkStatus     .~ networkStatus'
+                    & networkStatus     .~ newNetworkStatusIfNotFail networkStatus' gs
           networkStatus'
-            | not stillHasSpaceForOtherPlayers = newNetworkStatusIfNotFail SharingGameSetup gs
+            | not stillHasSpaceForOtherPlayers = SharingGameSetup
             | otherwise                        = gs ^?! networkStatus
           stillHasSpaceForOtherPlayers = length (gs'^.playersIdentities) < maxNumberOfPlayers
        in case Map.lookup sId' (gs^.playersIdentities) of
@@ -274,7 +274,7 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
     handleNS (Request ResetNetwork) = do
       clearPendingDhtOps
       liftIO $ atomically $ modifyTVar gsTV $ \ gs -> defaultOnlineGameState
-        & networkStatus .~ AwaitingRequest
+        & networkStatus .~ newNetworkStatusIfNotFail AwaitingRequest gs
         & myID          .~ gs ^. myID
         & myName        .~ gs ^. myName
     handleNS _ = return ()

@@ -13,6 +13,7 @@
 
 module GameState where
 
+import Data.Word
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Default
@@ -55,6 +56,7 @@ data OnlineGameStatus = AwaitingPlayerTurn
 data NetworkRequest = GameAnnounce OnlineGameSettings String
                     | JoinGame GameCode String
                     | GameStart
+                    | PlayTurn (Either Card Card)
                     | ResetNetwork
                     deriving Show
 data NetworkEvent = Connection
@@ -85,12 +87,15 @@ data GameState = GameState { _cardsOnTable :: CardsOnTable
                | OnlineGameState { _cardsOnTable          :: CardsOnTable
                                  , _deck                  :: [Card]
                                  , _players               :: [PlayerState]
+                                 , _gameTurns             :: Map Word16 (Either Card Card)
                                  , _playersIdentities     :: Map OnlinePlayerID OnlinePlayerName
                                  , _networkStatus         :: NetworkStatus
                                  , _gameSettings          :: OnlineGameSettings
                                  , _gameHostID            :: String
+                                 , _turnNumber            :: Word16
                                  , _myID                  :: String
                                  , _myName                :: String
+                                 , _myPlayerRank          :: Int
                                  }
 makeLenses ''GameState
 
@@ -121,7 +126,7 @@ instance Show CardsOnTable where
 
 instance Show GameState where
   show gs@(GameState {}) = unlines [ "Deck:"
-                                   , "   " ++ show (gs^.deck)
+                                   , "    " ++ show (gs^.deck)
                                    , "Players: "
                                    ]
                            ++ "\n"
@@ -131,15 +136,18 @@ instance Show GameState where
                                       , unlines $ map ("    "++) (lines (show $ gs^.cardsOnTable))
                                       ]
   show gs@(OnlineGameState {}) = show (GameState (gs^.cardsOnTable) (gs^.deck) (gs^.players))
-                                 ++ unlines [ "Player IDs:"
+                                 ++ unlines [ "GameTurns:"
+                                            , "    " <> show (Map.toList $ gs ^. gameTurns)
+                                            , "Player IDs:"
                                             , "    " <> show (Map.toList (gs^.playersIdentities))
                                             , "NetworkStatus: "  <> show (gs^?!networkStatus)
                                             , "GameSettings:"
                                             , "    " <> " GameCode:        " <> gs^.gameSettings.gameCode
                                             , "    " <> " NumberOfPlayers: " <> show (gs^?!gameSettings.numberOfPlayers)
-                                            , "GameHostID: " <> gs ^. gameHostID
-                                            , "MyID:       " <> gs ^. myID
-                                            , "MyName:     " <> gs ^. myName
+                                            , "GameHostID:   " <> gs ^. gameHostID
+                                            , "MyID:         " <> gs ^. myID
+                                            , "MyName:       " <> gs ^. myName
+                                            , "MyPlayerRank: " <> show (gs ^?! myPlayerRank)
                                             ]
 
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ :: Int
@@ -149,13 +157,27 @@ defaultOnlineGameState :: GameState
 defaultOnlineGameState = OnlineGameState { _cardsOnTable      = def
                                          , _deck              = []
                                          , _players           = []
+                                         , _gameTurns         = Map.empty
                                          , _playersIdentities = mempty
                                          , _networkStatus     = AwaitingRequest
                                          , _gameSettings      = OnlineGameSettings [] 0
                                          , _gameHostID        = ""
+                                         , _turnNumber        = 0
                                          , _myID              = ""
                                          , _myName            = ""
+                                         , _myPlayerRank      = 0
                                          }
+
+splitAtMissingTurn :: GameState -> Map Word16 (Either Card Card) -> ([(Word16, Either Card Card)], [(Word16, Either Card Card)])
+splitAtMissingTurn gs gameTurns' = (consecutivePlayerTurns', rest)
+  where
+    rest = map snd $ dropWhile (uncurry (==)) $ zip (Map.toList gameTurns') consecutivePlayerTurns'
+    consecutivePlayerTurns' = consecutivePlayerTurns gs gameTurns'
+
+consecutivePlayerTurns :: GameState -> Map Word16 (Either Card Card) -> [(Word16, Either Card Card)]
+consecutivePlayerTurns gs gameTurns' = map fst $ takeWhile turnIsSubsequent $ zip (Map.toList gameTurns') [gs^?!turnNumber..]
+  where
+    turnIsSubsequent ((t',_), t) = t' == t + 1
 
 {-| Lentille (Lens' s GameState)
 

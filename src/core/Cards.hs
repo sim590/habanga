@@ -14,21 +14,31 @@
 -}
 
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Cards where
 
+import Data.Data
 import Data.Default
 
 import Control.Lens
 
+import Codec.Serialise
+
+import GHC.Generics
+
 data Color = Red | Yellow | Blue | Purple
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic, Data)
 
 data Card  = Card { _value :: Int
                   , _color :: Maybe Color
                   }
-                  deriving (Eq, Ord)
+                  deriving (Eq, Ord, Generic, Data)
 makeLenses ''Card
+
+instance Serialise Color
+instance Serialise Card
 
 instance Show Color where
   show Red    = "Rouge"

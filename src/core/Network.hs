@@ -23,9 +23,13 @@ module Network ( loop
 
 import GHC.Generics
 
+import Data.Maybe
+import Data.Word
+import Data.Default
 import Data.Data
 import Data.Char
 import Data.Map (Map)
+import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.ByteString as BS
 
@@ -52,6 +56,7 @@ import OpenDHT.DhtRunner ( DhtRunnerM
                          )
 import qualified OpenDHT.DhtRunner as DhtRunner
 
+import Cards
 import GameState
 
 -- Le temps de pause de la boucle en microsecondes
@@ -73,6 +78,9 @@ data HabangaPacketContent = GameAnnouncement
                           | GameJoinRequestAccepted
                           | GameSetup { _playersIdentities :: Map OnlinePlayerID OnlinePlayerName
                                       }
+                          | PlayerTurn { _playedCard :: Either Card Card
+                                       , _turnNumber :: Word16
+                                       }
   deriving (Generic, Data, Show)
 data HabangaPacket = HabangaPacket { _senderID   :: String
                                    , _content    :: HabangaPacketContent
@@ -94,6 +102,9 @@ _GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ = show $ toConstr GameJoinRequestAccepted
 _GAME_SETUP_UTYPE_ :: String
 _GAME_SETUP_UTYPE_ = show $ toConstr $ GameSetup mempty
 
+_PLAYER_TURN_UTYPE_ :: String
+_PLAYER_TURN_UTYPE_ = show $ toConstr $ PlayerTurn (Left def) 0
+
 -- TODO:
 shutdownCb :: ShutdownCallback
 shutdownCb = return ()
@@ -114,6 +125,51 @@ newNetworkStatusIfNotFail :: NetworkStatus -> GameState -> NetworkStatus
 newNetworkStatusIfNotFail ns gs = let currentNetworkStatus = gs ^?! networkStatus in case currentNetworkStatus of
   NetworkFailure {} -> currentNetworkStatus
   _                 -> ns
+
+playMyTurn :: Either Card Card -> TVar GameState -> DhtRunnerM Dht ()
+playMyTurn card gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
+  gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+  let
+    packet          = HabangaPacket { _senderID = gs ^. myID
+                                    , _content  = PlayerTurn card (gs ^?! turnNumber + 1)
+                                    }
+    playerTurnValue = InputValue { _valueData     = BS.toStrict $ serialise packet
+                                 , _valueUserType = _PLAYER_TURN_UTYPE_
+                                 }
+    onDone False gs' = gs' & networkStatus .~ newNetworkStatusIfNotFail failure gs'
+      where
+        failure = NetworkFailure (ShareGameSetupFailure "network: échec de l'envoi mon jeu pour ce tour.")
+    onDone _ gs' = gs'
+    doneCb success  = atomically $ modifyTVar gsTV $ onDone success
+  liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & networkStatus .~ newNetworkStatusIfNotFail (GameOnGoing AwaitingOtherPlayerTurn) gs'
+  void $ DhtRunner.put gcHash playerTurnValue doneCb False
+
+gameOnGoingCb :: TVar GameState -> ValueCallback
+gameOnGoingCb _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
+gameOnGoingCb _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
+gameOnGoingCb _    (StoredValue {})            True = return True
+gameOnGoingCb gsTV (StoredValue d _ _ _ utype) False
+  | utype == _PLAYER_TURN_UTYPE_ = deserialiseAndTreatPacket
+  | otherwise                    = return True
+  where
+    deserialiseAndTreatPacket = do
+      eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
+      case eitherHabangaPacketOrFail of
+        Left (DeserialiseFailure {}) -> return True
+        Right habangaPacket          -> atomically $ stateTVar gsTV $ treatPacket habangaPacket
+    treatPacket (HabangaPacket sId (PlayerTurn card tn)) gs
+      | sId == gs ^. myID = (True, gs)
+      | otherwise         = (True, gs')
+      where
+        gs'                    = gs & gameTurns     .~ gameTurns'
+                                    & networkStatus .~ newNetworkStatusIfNotFail networkStatus' gs
+        gameTurns'             = Map.insert tn card (gs^.gameTurns)
+        lastTurnNumber         = fromIntegral $ fst $ last $ consecutivePlayerTurns gs gameTurns'
+        isOurTurn              = lastTurnNumber `mod` (gs ^?! gameSettings . numberOfPlayers) == gs ^?! myPlayerRank
+        networkStatus'
+          | isOurTurn = GameOnGoing AwaitingPlayerTurn
+          | otherwise = gs ^?! networkStatus
+    treatPacket _ gs = (True, gs)
 
 shareGameSetup :: TVar GameState -> DhtRunnerM Dht ()
 shareGameSetup gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
@@ -271,6 +327,26 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
     handleNS SetupPhaseDone = do
       clearPendingDhtOps
       liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusIfNotFail GameReadyForInitialization gs
+    handleNS (Request GameStart) = do
+      gs     <- liftIO $ readTVarIO gsTV
+      gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+      let
+        myPlayerRank' = fromJust $ List.elemIndex (gs^.myName) $ map (view name) (gs ^. players)
+        networkStatus'
+          | myPlayerRank' == 0 = GameOnGoing AwaitingPlayerTurn
+          | otherwise          = GameOnGoing AwaitingOtherPlayerTurn
+      liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs'
+        & networkStatus .~ newNetworkStatusIfNotFail networkStatus' gs'
+        & myPlayerRank  .~ myPlayerRank'
+        & turnNumber    .~ 0
+      void $ DhtRunner.listen gcHash (gameOnGoingCb gsTV) shutdownCb
+    handleNS (Request (PlayTurn card)) = liftIO (readTVarIO gsTV) >>= \ gs -> do
+      let
+        currentPlayer    = last (gs ^. players) -- on vient juste de jouer notre tour, donc on est rendu à la fin.
+        isMyTurn         = currentPlayer ^. name == gs ^. myName
+        revertStatus gs' = gs' & networkStatus .~ newNetworkStatusIfNotFail (GameOnGoing AwaitingOtherPlayerTurn) gs'
+      if isMyTurn then playMyTurn card gsTV
+                  else liftIO $ atomically $ modifyTVar gsTV revertStatus
     handleNS (Request ResetNetwork) = do
       clearPendingDhtOps
       liftIO $ atomically $ modifyTVar gsTV $ \ gs -> defaultOnlineGameState

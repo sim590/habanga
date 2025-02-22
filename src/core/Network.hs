@@ -267,10 +267,10 @@ handleNetworkStatus gsTV status    = handleNS status >> return True
                                                            & myName            .~ myname
                                                            & playersIdentities .~ Map.fromList [(gs'^.myID, myname)]
       void $ announceGame theGameSettings gsTV
-    handleNS SharingGameSetup   = shareGameSetup gsTV
+    handleNS SharingGameSetup = shareGameSetup gsTV
     handleNS SetupPhaseDone = do
       clearPendingDhtOps
-      liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ GameInitialization
+      liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusIfNotFail GameReadyForInitialization gs
     handleNS (Request ResetNetwork) = do
       clearPendingDhtOps
       liftIO $ atomically $ modifyTVar gsTV $ \ gs -> defaultOnlineGameState

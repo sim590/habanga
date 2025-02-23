@@ -16,7 +16,6 @@ module GameView ( event
                 ) where
 
 import qualified Data.Text as Text
-import qualified Data.List as List
 
 import Control.Lens
 import Control.Monad.Trans.Maybe
@@ -83,15 +82,18 @@ goBackOrQuit = do
   gameViewState . gameLog .= []
   currentFocus %= focusSetCurrent (MainMenu MainMenuButtons)
 
-playCard :: Game.RangeBoundary -> T.EventM AppFocus ProgramState ()
-playCard rb = do
+playCard :: Either () () -> T.EventM AppFocus ProgramState ()
+playCard side = do
   cardIdx    <- use (gameViewState . gameViewIndex)
   thePlayers <- use (gameState . players)
   let currentPlayer = head thePlayers
       card          = (currentPlayer^.cardsInHand) !! cardIdx
+      ec            = case side of
+                        Left {}  -> Left card
+                        Right {} -> Right card
       cardColorStr  = Text.unpack $ Text.toLower $ Text.pack $ maybe "gris" show (card^.color)
 
-  cardsDrawn <- runMaybeT $ Game.processPlayerTurnAction card rb
+  cardsDrawn <- runMaybeT $ Game.processPlayerTurnAction ec
 
   let
     cardsDrawnLog = [">> " <> "pige " <> show (cardsDrawn^?!_Just) <> " carte(s)!" | ((>0) <$> cardsDrawn) == Just True]
@@ -109,8 +111,8 @@ event ev = do
   let
     quitOrNothing (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = goBackOrQuit
     quitOrNothing _                                        = return ()
-    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'z') [] )) = playCard Game.LeftBoundary
-    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'c') [] )) = playCard Game.RightBoundary
+    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'z') [] )) = playCard (Left ())
+    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'c') [] )) = playCard (Right())
     mainEvent (T.VtyEvent (V.EvKey V.KRight      [] )) = goRight
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'l') [] )) = goRight
     mainEvent (T.VtyEvent (V.EvKey V.KLeft       [] )) = goLeft

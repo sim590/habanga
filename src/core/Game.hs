@@ -14,12 +14,12 @@
 module Game ( initializeIO
             , initialize
             , reInitialize
-            , fromEitherCard
             , winner
             , processPlayerTurnAction
             , RangeBoundary (..)
             ) where
 
+import Data.Either.Extra
 import qualified Data.List as List
 
 import Control.Monad
@@ -34,10 +34,6 @@ import Cards
 import GameState
 
 data RangeBoundary = LeftBoundary | RightBoundary
-
-fromEitherCard :: Either Card Card -> (Card, RangeBoundary)
-fromEitherCard (Left c)  = (c, LeftBoundary)
-fromEitherCard (Right c) = (c, RightBoundary)
 
 initializeIO
   :: [String]     -- ^ Les noms des différents joueurs.
@@ -122,11 +118,12 @@ winner = do
 
 processPlayerTurnAction
   :: (MonadState s m, GameStated s)
-  => Card          -- ^ La carte jouée par le joueur.
-  -> RangeBoundary -- ^ Le côté où placer la carte du joueur (gauche/droite) selon la couleur de
-                   --   celle-ci.
+  => Either Card Card -- ^ La carte jouée par le joueur. Le type `Either` nous indique si la carte est jouée à gauche ou
+                      --   à droite.
   -> MaybeT m Int
-processPlayerTurnAction card side = do
+processPlayerTurnAction eitherCard = do
+  let
+    card = fromEither eitherCard
   thePlayers <- use $ gameStateLens . players
   when (null thePlayers) $ error "processPlayerTurnAction: aucun joueur lors de l'exécution du tour d'un joueur?"
 
@@ -137,9 +134,9 @@ processPlayerTurnAction card side = do
 
   (gameStateLens . players . _head . cardsInHand) %= List.delete card
 
-  let boundaryLens = case side of
-       LeftBoundary  -> _1
-       RightBoundary -> _2
+  let boundaryLens = case eitherCard of
+       Left {}  -> _1
+       Right {} -> _2
 
   let colorLens c = case c^.color of
         Just Red    -> red

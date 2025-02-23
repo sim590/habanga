@@ -129,8 +129,7 @@ executeCmd = do
             PlayTurn <$> mCard
         case mPlayerTurn of
           Just (PlayTurn ec) -> do
-            let (c, b) = fromEitherCard ec
-            (mNumberOfCardsDrawn, gs') <- flip runStateT gs $ runMaybeT $ processPlayerTurnAction c b
+            (mNumberOfCardsDrawn, gs') <- flip runStateT gs $ runMaybeT $ processPlayerTurnAction ec
             case mNumberOfCardsDrawn of
               Just nCardsToDraw  -> do
                 when (nCardsToDraw > 0) $
@@ -144,10 +143,9 @@ executeCmd = do
       let
         consecutivePlayerTurns' = consecutivePlayerTurns netState (netState ^. gameTurns)
       case consecutivePlayerTurns' of
-        ((n, turn):_) -> do
+        ((n, ec):_) -> do
           gs' <- flip execStateT gs $ do
-            let (c, b) = fromEitherCard turn
-            runMaybeT $ processPlayerTurnAction c b
+            runMaybeT $ processPlayerTurnAction ec
           gameState .= gs'
           liftIO $ atomically $ modifyTVar (gs^?!networkState) $ gameTurns %~ Map.delete n
         _ -> logText %= (<>["err.. Aucun tour à traiter!"])

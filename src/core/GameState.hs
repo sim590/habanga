@@ -69,7 +69,7 @@ data NetworkStatus = AwaitingRequest
                    | SetupPhaseDone
                    | GameReadyForInitialization
                    | GameOnGoing OnlineGameStatus
-                   | EndingGame
+                   | GameEnded
                    | ShuttingDown
                    | NetworkFailure NetworkFailureType
                    deriving Show

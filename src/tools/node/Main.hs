@@ -59,6 +59,7 @@ import Cards
 import Game
 import GameState
 import Network
+import NetworkState
 
 data AppFocus = Input
               | Log
@@ -67,7 +68,7 @@ data AppFocus = Input
 data NodeState = NodeState { _focusRing   :: F.FocusRing AppFocus
                            , _inputEditor :: E.Editor String AppFocus
                            , _logText     :: [String]
-                           , _gameStateTV :: TVar GameState
+                           , _gameState   :: GameState
                            }
 makeLenses ''NodeState
 
@@ -82,8 +83,8 @@ logViewportScroll = M.viewportScroll Log
 
 executeCmd :: EventM AppFocus NodeState ()
 executeCmd = do
-  ie   <- use inputEditor
-  gsTV <- use gameStateTV
+  ie <- use inputEditor
+  gs <- use gameState
   let
     cmdline      = head $ E.getEditContents ie
     cmdlineToks  = words cmdline
@@ -94,25 +95,28 @@ executeCmd = do
       [n, gc, playerName] -> do
         let mn              = readMaybe n
             theGameSettings = OnlineGameSettings gc (fromMaybe 0 mn)
-        liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request (GameAnnounce theGameSettings playerName)
+        liftIO $ atomically $ modifyTVar (gs^?!networkState) $ status .~ Request (GameAnnounce theGameSettings playerName)
         when (isNothing mn) $ logText %= (<>["err.. Le nombre de joueurs '" <> n <> "' n'a pas pu être résolu à un entier!"])
       _ -> logInvalidParameter
     requestJoinGame = case args of
-      [gc, playerName] -> liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request (JoinGame gc playerName)
+      [gc, playerName] -> liftIO $ atomically $ modifyTVar (gs^?!networkState) $ status .~ Request (JoinGame gc playerName)
       _                -> logInvalidParameter
-    startGame = liftIO $ do
-      gs <- readTVarIO gsTV
+    startGame = do
+      netState <- liftIO $ readTVarIO (gs^?!networkState)
       let
-        sortedPlayerNames   = List.sort $ Map.elems $ gs ^. playersIdentities
-        gen                 = mkStdGen (fst $ head $ readHex $ gs^.gameSettings.gameCode)
+        sortedPlayerNames   = List.sort $ Map.elems $ netState ^. playersIdentities
+        gen                 = mkStdGen (fst $ head $ readHex $ netState^.gameSettings.gameCode)
         shuffledPlayerNames = deterministiclyShuffle sortedPlayerNames gen
-      gs' <- reInitialize shuffledPlayerNames gs gen
-      atomically $ modifyTVar gsTV $ const $ gs' & networkStatus .~ Request GameStart
+      gs' <- liftIO $ reInitialize shuffledPlayerNames gs gen
+      gameState .= gs'
+      let
+        myRank = fromJust $ List.elemIndex (netState^.myName) $ map (view name) (gs'^.players)
+      liftIO $ atomically $ modifyTVar (gs^?!networkState) $ status .~ Request (GameStart myRank)
     playTurn = case args of
       [n, strColor, slot] -> do
         let
-          modifyGs gs' = case mPlayerTurn of
-           Just pt -> gs' & networkStatus .~ Request pt
+          changeNetState gs' = case mPlayerTurn of
+           Just pt -> gs' & status .~ Request pt
            _       -> gs'
           mPlayerTurn = do
             c    <- readMaybe strColor
@@ -123,29 +127,33 @@ executeCmd = do
                 | slot `elem` [ "r", "right" ] = Just $ Right (Card n' (Just c))
                 | otherwise                    = Nothing
             PlayTurn <$> mCard
-        liftIO (readTVarIO gsTV) >>= \ gs -> case mPlayerTurn of
+        case mPlayerTurn of
           Just (PlayTurn ec) -> do
             let (c, b) = fromEitherCard ec
             (mNumberOfCardsDrawn, gs') <- flip runStateT gs $ runMaybeT $ processPlayerTurnAction c b
             case mNumberOfCardsDrawn of
-              Just _  -> liftIO $ atomically $ modifyTVar gsTV $ const $ modifyGs gs'
+              Just _  -> do
+                gameState .= gs'
+                liftIO $ atomically $ modifyTVar (gs^?!networkState) changeNetState
               Nothing -> logText %= (<>["err.. Impossible de jouer cette carte!"])
           _ -> logInvalidParameter
       _ -> logInvalidParameter
-    processOtherPlayerTurn = liftIO (readTVarIO gsTV) >>= \ gs -> do
+    processOtherPlayerTurn = liftIO (readTVarIO (gs^?!networkState)) >>= \ netState -> do
       let
-        consecutivePlayerTurns' = consecutivePlayerTurns gs (gs ^. gameTurns)
+        consecutivePlayerTurns' = consecutivePlayerTurns netState (netState ^. gameTurns)
       case consecutivePlayerTurns' of
         ((n, turn):_) -> do
           gs' <- flip execStateT gs $ do
             let (c, b) = fromEitherCard turn
             runMaybeT $ processPlayerTurnAction c b
-          liftIO $ atomically $ modifyTVar gsTV $ const $ gs' & gameTurns %~ Map.delete n
+          gameState .= gs'
+          liftIO $ atomically $ modifyTVar (gs^?!networkState) $ gameTurns %~ Map.delete n
         _ -> logText %= (<>["err.. Aucun tour à traiter!"])
-    resetNetwork = liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request ResetNetwork
+    resetNetwork = liftIO $ atomically $ modifyTVar (gs^?!networkState) $ status .~ Request ResetNetwork
     printGameState = do
-      gs <- liftIO $ readTVarIO gsTV
+      netState <- liftIO $ readTVarIO (gs^?!networkState)
       logText %= (<> lines (show gs))
+      logText %= (<> lines (show netState))
     exec
       | cmd == "aide"                                  = focusRing %= F.focusSetCurrent HelpBox
       | cmd `elem` [ "ag",  "announceGame"           ] = announceGame
@@ -270,14 +278,14 @@ myForkIO io = do
 
 main :: IO ()
 main = do
-  gsTV <- newTVarIO defaultOnlineGameState
-  mv   <- myForkIO $ runReaderT (Network.loop def) gsTV
+  gs   <- defaultOnlineGameState
+  mv   <- myForkIO $ runReaderT (Network.loop def) (gs^?!networkState)
   void $ M.defaultMain app $ NodeState { _focusRing   = F.focusRing $ enumFrom minBound
                                        , _inputEditor = E.editor Input Nothing ""
                                        , _logText     = []
-                                       , _gameStateTV = gsTV
+                                       , _gameState   = gs
                                        }
-  atomically $ modifyTVar gsTV $ networkStatus .~ ShuttingDown
+  atomically $ modifyTVar (gs^?!networkState) $ status .~ ShuttingDown
   readMVar mv
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :

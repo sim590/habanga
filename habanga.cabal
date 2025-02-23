@@ -65,6 +65,7 @@ library habanga-core
     exposed-modules:    Game
                         Cards
                         GameState
+                        NetworkState
                         Network
                         Random
     build-depends:      random >= 1.2.1 && < 1.3,

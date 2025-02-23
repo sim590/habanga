@@ -16,20 +16,17 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Network ( loop
                ) where
 
 import GHC.Generics
 
-import Data.Maybe
 import Data.Word
 import Data.Default
 import Data.Data
 import Data.Char
 import Data.Map (Map)
-import qualified Data.List as List
 import qualified Data.Map as Map
 import qualified Data.ByteString as BS
 
@@ -57,7 +54,7 @@ import OpenDHT.DhtRunner ( DhtRunnerM
 import qualified OpenDHT.DhtRunner as DhtRunner
 
 import Cards
-import GameState
+import NetworkState
 
 -- Le temps de pause de la boucle en microsecondes
 _MAIN_LOOP_THREAD_SLEEP_TIME_ :: Int
@@ -121,35 +118,35 @@ clearListenRequests = do
     forM_ tokens $ \ t ->
       runMaybeT (DhtRunner.cancelListen h t)
 
-newNetworkStatusSafe :: NetworkStatus -> GameState -> NetworkStatus
-newNetworkStatusSafe ns gs = let currentNetworkStatus = gs ^?! networkStatus in case currentNetworkStatus of
+newNetworkStatusSafe :: NetworkStatus -> NetworkState -> NetworkStatus
+newNetworkStatusSafe nStatus ns = let currentNetworkStatus = ns ^. status in case currentNetworkStatus of
   NetworkFailure {} -> currentNetworkStatus
   ShuttingDown      -> currentNetworkStatus
-  _                 -> ns
+  _                 -> nStatus
 
-playMyTurn :: Either Card Card -> TVar GameState -> DhtRunnerM Dht ()
-playMyTurn card gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
-  gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+playMyTurn :: Either Card Card -> TVar NetworkState -> DhtRunnerM Dht ()
+playMyTurn card nsTV = liftIO (readTVarIO nsTV) >>= \ ns -> do
+  gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
   let
-    packet          = HabangaPacket { _senderID = gs ^. myID
-                                    , _content  = PlayerTurn card (gs ^?! turnNumber + 1)
+    packet          = HabangaPacket { _senderID = ns ^. myID
+                                    , _content  = PlayerTurn card (ns ^?! turnNumber + 1)
                                     }
     playerTurnValue = InputValue { _valueData     = BS.toStrict $ serialise packet
                                  , _valueUserType = _PLAYER_TURN_UTYPE_
                                  }
-    onDone False gs' = gs' & networkStatus .~ newNetworkStatusSafe failure gs'
+    onDone False gs' = gs' & status .~ newNetworkStatusSafe failure gs'
       where
         failure = NetworkFailure (ShareGameSetupFailure "network: échec de l'envoi mon jeu pour ce tour.")
     onDone _ gs' = gs'
-    doneCb success  = atomically $ modifyTVar gsTV $ onDone success
-  liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & networkStatus .~ newNetworkStatusSafe (GameOnGoing AwaitingOtherPlayerTurn) gs'
+    doneCb success  = atomically $ modifyTVar nsTV $ onDone success
+  liftIO $ atomically $ modifyTVar nsTV $ \ gs' -> gs' & status .~ newNetworkStatusSafe (GameOnGoing AwaitingOtherPlayerTurn) gs'
   void $ DhtRunner.put gcHash playerTurnValue doneCb False
 
-gameOnGoingCb :: TVar GameState -> ValueCallback
+gameOnGoingCb :: TVar NetworkState -> ValueCallback
 gameOnGoingCb _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
 gameOnGoingCb _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
 gameOnGoingCb _    (StoredValue {})            True = return True
-gameOnGoingCb gsTV (StoredValue d _ _ _ utype) False
+gameOnGoingCb nsTV (StoredValue d _ _ _ utype) False
   | utype == _PLAYER_TURN_UTYPE_ = deserialiseAndTreatPacket
   | otherwise                    = return True
   where
@@ -157,44 +154,44 @@ gameOnGoingCb gsTV (StoredValue d _ _ _ utype) False
       eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
       case eitherHabangaPacketOrFail of
         Left (DeserialiseFailure {}) -> return True
-        Right habangaPacket          -> atomically $ stateTVar gsTV $ treatPacket habangaPacket
-    treatPacket (HabangaPacket sId (PlayerTurn card tn)) gs
-      | sId == gs ^. myID = (True, gs)
+        Right habangaPacket          -> atomically $ stateTVar nsTV $ treatPacket habangaPacket
+    treatPacket (HabangaPacket sId (PlayerTurn card tn)) ns
+      | sId == ns ^. myID = (True, ns)
       | otherwise         = (True, gs')
       where
-        gs'                    = gs & gameTurns     .~ gameTurns'
-                                    & networkStatus .~ newNetworkStatusSafe networkStatus' gs
-        gameTurns'             = Map.insert tn card (gs^.gameTurns)
-        lastTurnNumber         = fromIntegral $ fst $ last $ consecutivePlayerTurns gs gameTurns'
-        isOurTurn              = lastTurnNumber `mod` (gs ^?! gameSettings . numberOfPlayers) == gs ^?! myPlayerRank
+        gs'                    = ns & gameTurns     .~ gameTurns'
+                                    & status .~ newNetworkStatusSafe networkStatus' ns
+        gameTurns'             = Map.insert tn card (ns^.gameTurns)
+        lastTurnNumber         = fromIntegral $ fst $ last $ consecutivePlayerTurns ns gameTurns'
+        isOurTurn              = lastTurnNumber `mod` (ns ^?! gameSettings . numberOfPlayers) == ns ^?! myPlayerRank
         networkStatus'
           | isOurTurn = GameOnGoing AwaitingPlayerTurn
-          | otherwise = gs ^?! networkStatus
-    treatPacket _ gs = (True, gs)
+          | otherwise = ns ^. status
+    treatPacket _ ns = (True, ns)
 
-shareGameSetup :: TVar GameState -> DhtRunnerM Dht ()
-shareGameSetup gsTV = liftIO (readTVarIO gsTV) >>= \ gs -> do
-  gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+shareGameSetup :: TVar NetworkState -> DhtRunnerM Dht ()
+shareGameSetup nsTV = liftIO (readTVarIO nsTV) >>= \ ns -> do
+  gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
   let
-    packet               = HabangaPacket { _senderID = gs ^. myID
-                                         , _content  = GameSetup $ gs ^. playersIdentities
+    packet               = HabangaPacket { _senderID = ns ^. myID
+                                         , _content  = GameSetup $ ns ^. playersIdentities
                                          }
     gameJoinRequestValue = InputValue { _valueData     = BS.toStrict $ serialise packet
                                       , _valueUserType = _GAME_SETUP_UTYPE_
                                       }
-    onDone False gs' = gs' & networkStatus .~ newNetworkStatusSafe failure gs'
+    onDone False gs' = gs' & status .~ newNetworkStatusSafe failure gs'
       where
         failure = NetworkFailure (ShareGameSetupFailure "network: échec de l'envoi d'une requête pour partager la config de la partie.")
     onDone _ gs'     = gs'
-    doneCb success  = atomically $ modifyTVar gsTV $ onDone success
-  liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & networkStatus .~ newNetworkStatusSafe SetupPhaseDone gs'
+    doneCb success  = atomically $ modifyTVar nsTV $ onDone success
+  liftIO $ atomically $ modifyTVar nsTV $ \ gs' -> gs' & status .~ newNetworkStatusSafe SetupPhaseDone gs'
   void $ DhtRunner.put gcHash gameJoinRequestValue doneCb False
 
-gameJoinRequestCb :: String -> TVar GameState -> ValueCallback
+gameJoinRequestCb :: String -> TVar NetworkState -> ValueCallback
 gameJoinRequestCb _    _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
 gameJoinRequestCb _    _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
 gameJoinRequestCb _    _    (StoredValue {})            True = return True
-gameJoinRequestCb myId gsTV (StoredValue d _ _ _ utype) False
+gameJoinRequestCb myId nsTV (StoredValue d _ _ _ utype) False
   | utype == _GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ = deserialiseAndTreatPacket
   | utype == _GAME_SETUP_UTYPE_                 = deserialiseAndTreatPacket
   | otherwise                                   = return True
@@ -203,36 +200,36 @@ gameJoinRequestCb myId gsTV (StoredValue d _ _ _ utype) False
       eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
       case eitherHabangaPacketOrFail of
         Left (DeserialiseFailure {}) -> return True
-        Right habangaPacket          -> atomically $ stateTVar gsTV $ treatPacket habangaPacket
-    treatPacket (HabangaPacket sId (GameSetup playersIds)) gs = (True, gs')
+        Right habangaPacket          -> atomically $ stateTVar nsTV $ treatPacket habangaPacket
+    treatPacket (HabangaPacket sId (GameSetup playersIds)) ns = (True, gs')
       where
         sId'                 = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
         myId'                = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ myId
-        currentNetworkStatus = gs ^?! networkStatus
-        gs'                  = gs
+        currentNetworkStatus = ns ^. status
+        gs'                  = ns
                                   & playersIdentities              .~ playersIds
                                   & gameHostID                     .~ sId'
                                   & gameSettings . numberOfPlayers .~ length playersIds
-                                  & networkStatus                  .~ networkStatus'
+                                  & status                         .~ networkStatus'
         networkStatus'
           | not (Map.member myId' playersIds) = NetworkFailure $ GameJoinRequestFailure ourIdNotFoundFailureMsg
           | not (Map.member sId' playersIds)  = NetworkFailure $ GameJoinRequestFailure hostIdNotFoundFairureMsg
           | otherwise                         = case currentNetworkStatus of
             SetupPhaseDone -> currentNetworkStatus
-            _              -> newNetworkStatusSafe SetupPhaseDone gs
-    treatPacket (HabangaPacket sId GameJoinRequestAccepted) gs = (True, gsWithGameHostID)
+            _              -> newNetworkStatusSafe SetupPhaseDone ns
+    treatPacket (HabangaPacket sId GameJoinRequestAccepted) ns = (True, gsWithGameHostID)
       where
         sId'             = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
-        gsWithGameHostID = gs
+        gsWithGameHostID = ns
                               & gameHostID    .~ sId'
-                              & networkStatus .~ newNetworkStatusSafe (AwaitingEvent GameStarted) gs
-    treatPacket _ gs = (True, gs)
+                              & status .~ newNetworkStatusSafe (AwaitingEvent GameStarted) ns
+    treatPacket _ ns = (True, ns)
     ourIdNotFoundFailureMsg  = "network: on a reçu un paquet GameSetup, mais notre ID n'était pas dans la liste."
     hostIdNotFoundFairureMsg = "network: on a reçu un paquet GameSetup, mais l'ID de l'hôte n'était pas dans la liste."
 
 
-requestToJoinGame :: GameCode -> String -> TVar GameState -> DhtRunnerM Dht ()
-requestToJoinGame gc playerName gsTV = liftIO (readTVarIO gsTV) >>= \ initialGameState -> do
+requestToJoinGame :: GameCode -> String -> TVar NetworkState -> DhtRunnerM Dht ()
+requestToJoinGame gc playerName nsTV = liftIO (readTVarIO nsTV) >>= \ initialGameState -> do
   gcHash <- liftIO $ unDht $ infoHashFromString gc
   let
     packet               = HabangaPacket { _senderID = initialGameState ^. myID
@@ -241,47 +238,47 @@ requestToJoinGame gc playerName gsTV = liftIO (readTVarIO gsTV) >>= \ initialGam
     gameJoinRequestValue = InputValue { _valueData     = BS.toStrict $ serialise packet
                                       , _valueUserType = _GAME_JOIN_REQUEST_UTYPE_
                                       }
-    onDone False gs = gs & networkStatus .~ newNetworkStatusSafe failure gs
+    onDone False ns = ns & status .~ newNetworkStatusSafe failure ns
       where
         failure = NetworkFailure (GameJoinRequestFailure "network: échec de l'envoi d'une requête pour joindre la partie.")
-    onDone _ gs     = gs
-    doneCb success  = atomically $ modifyTVar gsTV $ onDone success
-  liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusSafe (AwaitingEvent Connection) gs
+    onDone _ ns     = ns
+    doneCb success  = atomically $ modifyTVar nsTV $ onDone success
+  liftIO $ atomically $ modifyTVar nsTV $ \ ns -> ns & status .~ newNetworkStatusSafe (AwaitingEvent Connection) ns
   void $ DhtRunner.put gcHash gameJoinRequestValue doneCb False
-  void $ DhtRunner.listen gcHash (gameJoinRequestCb (initialGameState ^. myID) gsTV) shutdownCb
+  void $ DhtRunner.listen gcHash (gameJoinRequestCb (initialGameState ^. myID) nsTV) shutdownCb
 
-gameAnnounceCb :: Int -> TVar GameState -> ValueCallback
+gameAnnounceCb :: Int -> TVar NetworkState -> ValueCallback
 gameAnnounceCb _                  _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
 gameAnnounceCb _                  _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
 gameAnnounceCb _                  _    (StoredValue {})            True = return True
-gameAnnounceCb maxNumberOfPlayers gsTV (StoredValue d _ _ _ utype) False
+gameAnnounceCb maxNumberOfPlayers nsTV (StoredValue d _ _ _ utype) False
   | utype == _GAME_JOIN_REQUEST_UTYPE_ = deserialiseAndTreatPacket
   | otherwise                          = return True
   where
-    treatPacket (HabangaPacket sId (GameJoinRequest pName)) gs =
+    treatPacket (HabangaPacket sId (GameJoinRequest pName)) ns =
       let sId' = take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ sId
-          gs'  = gs
+          gs'  = ns
                     & playersIdentities %~ Map.insert sId' pName
-                    & networkStatus     .~ newNetworkStatusSafe networkStatus' gs
+                    & status            .~ newNetworkStatusSafe networkStatus' ns
           networkStatus'
             | not stillHasSpaceForOtherPlayers = SharingGameSetup
-            | otherwise                        = gs ^?! networkStatus
+            | otherwise                        = ns ^. status
           stillHasSpaceForOtherPlayers = length (gs'^.playersIdentities) < maxNumberOfPlayers
-       in case Map.lookup sId' (gs^.playersIdentities) of
-            Just _  -> (True, gs)
+       in case Map.lookup sId' (ns^.playersIdentities) of
+            Just _  -> (True, ns)
             Nothing -> (stillHasSpaceForOtherPlayers, gs')
-    treatPacket _ gs = (True, gs)
+    treatPacket _ ns = (True, ns)
 
     deserialiseAndTreatPacket = do
       eitherHabangaPacketOrFail <- try $ return $ deserialise $ BS.fromStrict d
       case eitherHabangaPacketOrFail of
         Left (DeserialiseFailure {}) -> return True
-        Right habangaPacket          -> atomically $ stateTVar gsTV $ \ gs ->
-          if length (gs^.playersIdentities) < maxNumberOfPlayers then treatPacket habangaPacket gs
-                                                                 else (False, gs)
+        Right habangaPacket          -> atomically $ stateTVar nsTV $ \ ns ->
+          if length (ns^.playersIdentities) < maxNumberOfPlayers then treatPacket habangaPacket ns
+                                                                 else (False, ns)
 
-announceGame :: OnlineGameSettings -> TVar GameState -> DhtRunnerM Dht OpToken
-announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = liftIO (readTVarIO gsTV) >>= \ initialGameState -> do
+announceGame :: OnlineGameSettings -> TVar NetworkState -> DhtRunnerM Dht OpToken
+announceGame (OnlineGameSettings gc maxNumberOfPlayers) nsTV = liftIO (readTVarIO nsTV) >>= \ initialGameState -> do
   gcHash <- liftIO $ unDht $ infoHashFromString gc
   let
     packet            = HabangaPacket { _senderID   = initialGameState ^. myID
@@ -290,14 +287,14 @@ announceGame (OnlineGameSettings gc maxNumberOfPlayers) gsTV = liftIO (readTVarI
     gameAnnounceValue = InputValue { _valueData     = BS.toStrict $ serialise packet
                                    , _valueUserType = _GAME_ANNOUNCEMENT_UTYPE_
                                    }
-    onDone False gs = gs & networkStatus .~ newNetworkStatusSafe failure gs
+    onDone False ns = ns & status .~ newNetworkStatusSafe failure ns
       where
         failure = NetworkFailure (GameAnnouncementFailure "network: échec de l'envoi du paquet d'annonce de la partie.")
-    onDone _ gs     = gs
-    doneCb success  = atomically $ modifyTVar gsTV $ onDone success
-  liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusSafe (AwaitingEvent Connection) gs
+    onDone _ ns     = ns
+    doneCb success  = atomically $ modifyTVar nsTV $ onDone success
+  liftIO $ atomically $ modifyTVar nsTV $ \ ns -> ns & status .~ newNetworkStatusSafe (AwaitingEvent Connection) ns
   void $ DhtRunner.put gcHash gameAnnounceValue doneCb True
-  DhtRunner.listen gcHash (gameAnnounceCb maxNumberOfPlayers gsTV) shutdownCb
+  DhtRunner.listen gcHash (gameAnnounceCb maxNumberOfPlayers nsTV) shutdownCb
 
 initializeDHT :: DhtRunnerConfig -> DhtRunnerM Dht ()
 initializeDHT dhtRconf = do
@@ -305,73 +302,64 @@ initializeDHT dhtRconf = do
   when (all isSpace $ dhtRconf^.proxyServer) $
     DhtRunner.bootstrap _DEFAULT_BOOTSTRAP_ADDR_ _DEFAULT_BOOTSTRAP_PORT_
 
-handleNetworkStatus :: TVar GameState -> NetworkStatus -> DhtRunnerM Dht Bool
+handleNetworkStatus :: TVar NetworkState -> NetworkStatus -> DhtRunnerM Dht Bool
 handleNetworkStatus _ ShuttingDown = return False
-handleNetworkStatus gsTV status    = handleNS status >> return True
+handleNetworkStatus nsTV nStatus    = handleNS nStatus >> return True
   where
     clearPendingDhtOps = do
-      gs <- liftIO $ readTVarIO gsTV
-      gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+      ns <- liftIO $ readTVarIO nsTV
+      gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
       clearPermanentPutRequests gcHash
       clearListenRequests
     handleNS (Request (JoinGame gc myname)) = do
-      liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & gameSettings.gameCode .~ gc
+      liftIO $ atomically $ modifyTVar nsTV $ \ gs' -> gs' & gameSettings.gameCode .~ gc
                                                            & myName                .~ myname
-      requestToJoinGame gc myname gsTV
+      requestToJoinGame gc myname nsTV
     handleNS (Request (GameAnnounce theGameSettings myname)) = do
-      liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs' & gameSettings      .~ theGameSettings
+      liftIO $ atomically $ modifyTVar nsTV $ \ gs' -> gs' & gameSettings      .~ theGameSettings
                                                            & gameHostID        .~ gs' ^. myID
                                                            & myName            .~ myname
                                                            & playersIdentities .~ Map.fromList [(gs'^.myID, myname)]
-      void $ announceGame theGameSettings gsTV
-    handleNS SharingGameSetup = shareGameSetup gsTV
+      void $ announceGame theGameSettings nsTV
+    handleNS SharingGameSetup = shareGameSetup nsTV
     handleNS SetupPhaseDone = do
       clearPendingDhtOps
-      liftIO $ atomically $ modifyTVar gsTV $ \ gs -> gs & networkStatus .~ newNetworkStatusSafe GameReadyForInitialization gs
-    handleNS (Request GameStart) = do
-      gs     <- liftIO $ readTVarIO gsTV
-      gcHash <- liftIO $ unDht $ infoHashFromString $ gs ^. gameSettings . gameCode
+      liftIO $ atomically $ modifyTVar nsTV $ \ ns -> ns & status .~ newNetworkStatusSafe GameReadyForInitialization ns
+    handleNS (Request (GameStart myRank)) = do
+      ns     <- liftIO $ readTVarIO nsTV
+      gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
       let
-        myPlayerRank' = fromJust $ List.elemIndex (gs^.myName) $ map (view name) (gs ^. players)
         networkStatus'
-          | myPlayerRank' == 0 = GameOnGoing AwaitingPlayerTurn
-          | otherwise          = GameOnGoing AwaitingOtherPlayerTurn
-      liftIO $ atomically $ modifyTVar gsTV $ \ gs' -> gs'
-        & networkStatus .~ newNetworkStatusSafe networkStatus' gs'
-        & myPlayerRank  .~ myPlayerRank'
+          | myRank == 0 = GameOnGoing AwaitingPlayerTurn
+          | otherwise   = GameOnGoing AwaitingOtherPlayerTurn
+      liftIO $ atomically $ modifyTVar nsTV $ \ gs' -> gs'
+        & status .~ newNetworkStatusSafe networkStatus' gs'
+        & myPlayerRank  .~ myRank
         & turnNumber    .~ 0
-      void $ DhtRunner.listen gcHash (gameOnGoingCb gsTV) shutdownCb
-    handleNS (Request (PlayTurn card)) = liftIO (readTVarIO gsTV) >>= \ gs -> do
-      let
-        currentPlayer    = last (gs ^. players) -- on vient juste de jouer notre tour, donc on est rendu à la fin.
-        isMyTurn         = currentPlayer ^. name == gs ^. myName
-        revertStatus gs' = gs' & networkStatus .~ newNetworkStatusSafe (GameOnGoing AwaitingOtherPlayerTurn) gs'
-      if isMyTurn then playMyTurn card gsTV
-                  else liftIO $ atomically $ modifyTVar gsTV revertStatus
+      void $ DhtRunner.listen gcHash (gameOnGoingCb nsTV) shutdownCb
+    handleNS (Request (PlayTurn card)) = playMyTurn card nsTV
     handleNS (Request ResetNetwork) = do
       clearPendingDhtOps
-      liftIO $ atomically $ modifyTVar gsTV $ \ gs -> defaultOnlineGameState
-        & networkStatus .~ newNetworkStatusSafe AwaitingRequest gs
-        & myID          .~ gs ^. myID
-        & myName        .~ gs ^. myName
+      liftIO $ atomically $ modifyTVar nsTV $ \ ns -> def
+        & status .~ newNetworkStatusSafe AwaitingRequest ns
+        & myID          .~ ns ^. myID
+        & myName        .~ ns ^. myName
     handleNS _ = return ()
 
-loop :: (MonadIO m, MonadReader (TVar GameState) m) => DhtRunnerConfig -> m ()
-loop dhtRconf = ask >>= \ gsTV -> liftIO $ readTVarIO gsTV >>= \ case
-  OnlineGameState {} -> runDhtRunnerM shutdownCb $ do
-    let
-      innerLoop False = return ()
-      innerLoop True  = do
-        gs <- liftIO $ do
-          threadDelay _MAIN_LOOP_THREAD_SLEEP_TIME_
-          readTVarIO gsTV
-        b  <- handleNetworkStatus gsTV (gs^?!networkStatus)
-        innerLoop b
-    initializeDHT dhtRconf
-    myHash <- DhtRunner.getNodeIdHash
-    liftIO $ atomically $ modifyTVar gsTV (myID .~ take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ (show myHash))
-    innerLoop True
-  _ -> error "Network.loop: l'état du jeu passé n'était pas construit par OnlineGameState.."
+loop :: (MonadIO m, MonadReader (TVar NetworkState) m) => DhtRunnerConfig -> m ()
+loop dhtRconf = ask >>= \ nsTV -> liftIO $ runDhtRunnerM shutdownCb $ do
+  let
+    innerLoop False = return ()
+    innerLoop True  = do
+      ns <- liftIO $ do
+        threadDelay _MAIN_LOOP_THREAD_SLEEP_TIME_
+        readTVarIO nsTV
+      b  <- handleNetworkStatus nsTV (ns^.status)
+      innerLoop b
+  initializeDHT dhtRconf
+  myHash <- DhtRunner.getNodeIdHash
+  liftIO $ atomically $ modifyTVar nsTV (myID .~ take _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ (show myHash))
+  innerLoop True
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

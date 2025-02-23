@@ -35,6 +35,8 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
+    - name: Install opendht-c
+      run: sudo apt install libopendht-c-dev
     - name: Install dependencies
       run: |
         cabal update

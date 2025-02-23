@@ -14,6 +14,7 @@
 module Game ( initializeIO
             , initialize
             , reInitialize
+            , fromEitherCard
             , winner
             , processPlayerTurnAction
             , RangeBoundary (..)
@@ -33,6 +34,10 @@ import Cards
 import GameState
 
 data RangeBoundary = LeftBoundary | RightBoundary
+
+fromEitherCard :: Either Card Card -> (Card, RangeBoundary)
+fromEitherCard (Left c)  = (c, LeftBoundary)
+fromEitherCard (Right c) = (c, RightBoundary)
 
 initializeIO
   :: [String]     -- ^ Les noms des différents joueurs.

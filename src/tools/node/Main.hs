@@ -23,6 +23,8 @@ import Text.Read
 import Numeric
 
 import Control.Monad
+import Control.Monad.Trans.Maybe
+import Control.Monad.State
 import Control.Monad.Reader
 import Control.Lens
 import Control.Concurrent
@@ -53,6 +55,7 @@ import Graphics.Vty (defAttr)
 import qualified Graphics.Vty as V
 
 import Random
+import Cards
 import Game
 import GameState
 import Network
@@ -86,16 +89,17 @@ executeCmd = do
     cmdlineToks  = words cmdline
     cmd          = head cmdlineToks
     args         = tail cmdlineToks
+    logInvalidParameter = logText %= (<>["err.. Un des paramètres est invalide!"])
     announceGame = case args of
       [n, gc, playerName] -> do
         let mn              = readMaybe n
             theGameSettings = OnlineGameSettings gc (fromMaybe 0 mn)
         liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request (GameAnnounce theGameSettings playerName)
-        when (isNothing mn) $ logText %= (<>["oops! Le nombre de joueurs '" <> n <> "' n'a pas pu être résolu à un entier!"])
-      _ -> return ()
+        when (isNothing mn) $ logText %= (<>["err.. Le nombre de joueurs '" <> n <> "' n'a pas pu être résolu à un entier!"])
+      _ -> logInvalidParameter
     requestJoinGame = case args of
       [gc, playerName] -> liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request (JoinGame gc playerName)
-      _                -> return ()
+      _                -> logInvalidParameter
     startGame = liftIO $ do
       gs <- readTVarIO gsTV
       let
@@ -103,21 +107,57 @@ executeCmd = do
         gen                 = mkStdGen (fst $ head $ readHex $ gs^.gameSettings.gameCode)
         shuffledPlayerNames = deterministiclyShuffle sortedPlayerNames gen
       gs' <- reInitialize shuffledPlayerNames gs gen
-      atomically $ modifyTVar gsTV $ const gs'
+      atomically $ modifyTVar gsTV $ const $ gs' & networkStatus .~ Request GameStart
+    playTurn = case args of
+      [n, strColor, slot] -> do
+        let
+          modifyGs gs' = case mPlayerTurn of
+           Just pt -> gs' & networkStatus .~ Request pt
+           _       -> gs'
+          mPlayerTurn = do
+            c    <- readMaybe strColor
+            n'   <- readMaybe n
+            let
+              mCard
+                | slot `elem` [ "l", "left"  ] = Just $ Left  (Card n' (Just c))
+                | slot `elem` [ "r", "right" ] = Just $ Right (Card n' (Just c))
+                | otherwise                    = Nothing
+            PlayTurn <$> mCard
+        liftIO (readTVarIO gsTV) >>= \ gs -> case mPlayerTurn of
+          Just (PlayTurn ec) -> do
+            let (c, b) = fromEitherCard ec
+            (mNumberOfCardsDrawn, gs') <- flip runStateT gs $ runMaybeT $ processPlayerTurnAction c b
+            case mNumberOfCardsDrawn of
+              Just _  -> liftIO $ atomically $ modifyTVar gsTV $ const $ modifyGs gs'
+              Nothing -> logText %= (<>["err.. Impossible de jouer cette carte!"])
+          _ -> logInvalidParameter
+      _ -> logInvalidParameter
+    processOtherPlayerTurn = liftIO (readTVarIO gsTV) >>= \ gs -> do
+      let
+        consecutivePlayerTurns' = consecutivePlayerTurns gs (gs ^. gameTurns)
+      case consecutivePlayerTurns' of
+        ((n, turn):_) -> do
+          gs' <- flip execStateT gs $ do
+            let (c, b) = fromEitherCard turn
+            runMaybeT $ processPlayerTurnAction c b
+          liftIO $ atomically $ modifyTVar gsTV $ const $ gs' & gameTurns %~ Map.delete n
+        _ -> logText %= (<>["err.. Aucun tour à traiter!"])
     resetNetwork = liftIO $ atomically $ modifyTVar gsTV $ networkStatus .~ Request ResetNetwork
     printGameState = do
       gs <- liftIO $ readTVarIO gsTV
       logText %= (<> lines (show gs))
     exec
-      | cmd == "aide"                           = focusRing %= F.focusSetCurrent HelpBox
-      | cmd `elem` [ "ag",  "announceGame"    ] = announceGame
-      | cmd `elem` [ "rj",  "requestJoinGame" ] = requestJoinGame
-      | cmd `elem` [ "sg",  "startGame"       ] = startGame
-      | cmd `elem` [ "rs",  "resetNetwork"    ] = resetNetwork
-      | cmd `elem` [ "pgs", "printGameState"  ] = printGameState
-      | cmd `elem` [ "cl",  "clearLog"        ] = clearLog
-      | cmd `elem` [ "q",   "quit"            ] = M.halt
-      | otherwise     = logText %= (<>["err.. impossible d'exécuter cette commande!"])
+      | cmd == "aide"                                  = focusRing %= F.focusSetCurrent HelpBox
+      | cmd `elem` [ "ag",  "announceGame"           ] = announceGame
+      | cmd `elem` [ "rj",  "requestJoinGame"        ] = requestJoinGame
+      | cmd `elem` [ "sg",  "startGame"              ] = startGame
+      | cmd `elem` [ "pt",  "playTurn"               ] = playTurn
+      | cmd `elem` [ "po",  "processOtherPlayerTurn" ] = processOtherPlayerTurn
+      | cmd `elem` [ "rs",  "resetNetwork"           ] = resetNetwork
+      | cmd `elem` [ "pgs", "printGameState"         ] = printGameState
+      | cmd `elem` [ "cl",  "clearLog"               ] = clearLog
+      | cmd `elem` [ "q",   "quit"                   ] = M.halt
+      | otherwise                                      = logText %= (<>["err.. impossible d'exécuter cette commande!"])
   unless (null cmdline) $ do
     logText %= (<>[">>> " <> cmdline])
     exec
@@ -151,8 +191,8 @@ drawUI :: NodeState -> [Widget AppFocus]
 drawUI ns = helpBox <> [mainUI]
   where
     mainUI           = vBox [ B.border $ viewport Log T.Vertical $ vBox $ map str $ ns ^. logText
-                        , B.border $ str "node> " <+> vLimit 1 inputTextBox
-                        ]
+                            , B.border $ str "node> " <+> vLimit 1 inputTextBox
+                            ]
     inputTextBox     = F.withFocusRing (ns^.focusRing) (E.renderEditor (str . head)) (ns^.inputEditor)
     cmdsHelpText     = B.borderWithLabel (str "COMMANDES") $ str $ unlines
                        [ "aide"
@@ -172,6 +212,18 @@ drawUI ns = helpBox <> [mainUI]
                        , "sg"
                        , "startGame"
                        , "  Initialise l'état du jeu et prépare la couche réseau."
+                       , ""
+                       , "pt"
+                       , "playTurn {numéro} {couleur} {emplacement}"
+                       , "  Jouer à son tour une carte de numéro {numéro} et de couleur"
+                       , "  {couleur} à l'emplacement {emplacement} (gauche/droite)."
+                       , ""
+                       , "po"
+                       , "processOtherPlayerTurn"
+                       , "  Joue le tour d'un autre joueur. Les tours sont accumulés"
+                       , "  en cache. Cette commande doit être exécutée pour chaque tour"
+                       , "  des autres joueurs. Celle-ci n'aura un effet que si le tour"
+                       , "  du joueur a déjà été reçu."
                        , ""
                        , "rs"
                        , "resetNetwork"

@@ -29,7 +29,7 @@ import Codec.Serialise
 import GHC.Generics
 
 data Color = Red | Yellow | Blue | Purple
-  deriving (Eq, Ord, Generic, Data)
+  deriving (Eq, Ord, Generic, Data, Read)
 
 data Card  = Card { _value :: Int
                   , _color :: Maybe Color

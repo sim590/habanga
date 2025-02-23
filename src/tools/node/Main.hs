@@ -132,7 +132,9 @@ executeCmd = do
             let (c, b) = fromEitherCard ec
             (mNumberOfCardsDrawn, gs') <- flip runStateT gs $ runMaybeT $ processPlayerTurnAction c b
             case mNumberOfCardsDrawn of
-              Just _  -> do
+              Just nCardsToDraw  -> do
+                when (nCardsToDraw > 0) $
+                  logText %= (<> ["Vous pigez " <> show nCardsToDraw <> " carte(s)!"])
                 gameState .= gs'
                 liftIO $ atomically $ modifyTVar (gs^?!networkState) changeNetState
               Nothing -> logText %= (<>["err.. Impossible de jouer cette carte!"])

@@ -78,7 +78,8 @@ goBackOrQuit = use (mainMenuState.submenu) >>= \ case
 
 startGame :: [String] -> T.EventM AppFocus ProgramState ()
 startGame playerList = do
-  gameState <~ liftIO (initialize playerList)
+  -- FIXME: il faudra utiliser initialize avec un générateur basé sur le code de la partie.
+  gameState <~ liftIO (initializeIO playerList)
   currentFocus %= focusSetCurrent (Game Nothing)
 
 event :: T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
@@ -118,8 +119,9 @@ mkGameInitializationForm :: GameInitializationInfo -> Form GameInitializationInf
 mkGameInitializationForm =
     let label s w    = padLeft (Pad 1) $ padBottom (Pad 1) $ vLimit 2 (hLimit 20 $ str s <+> fill ' ') <+> w
         mMaxNumNames = Just _HABANGA_MAX_PLAYER_COUNT_
+        focusedItem    = MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
     in newForm [ label "Nom des joueurs" @@= B.border
-                                         @@= editTextField playerNamesField (MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)) mMaxNumNames
+                                         @@= editTextField playerNamesField focusedItem mMaxNumNames
                ]
 
 gameInitializationSubMenu :: ProgramState -> [Widget AppFocus]

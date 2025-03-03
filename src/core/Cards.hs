@@ -14,24 +14,31 @@
 -}
 
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Cards where
 
-import System.Random
-
+import Data.Data
 import Data.Default
 
-import Control.Monad.State
 import Control.Lens
 
+import Codec.Serialise
+
+import GHC.Generics
+
 data Color = Red | Yellow | Blue | Purple
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic, Data, Read)
 
 data Card  = Card { _value :: Int
                   , _color :: Maybe Color
                   }
-                  deriving (Eq, Ord)
+                  deriving (Eq, Ord, Generic, Data)
 makeLenses ''Card
+
+instance Serialise Color
+instance Serialise Card
 
 instance Show Color where
   show Red    = "Rouge"
@@ -66,17 +73,6 @@ fits :: Card -> Maybe Color -> (Int, Int) -> Bool
 fits (Card v0 col0) col1 (v1, v2)
   | col0 /= col1 = False
   | otherwise    = min v1 v2 < v0 && v0 < max v1 v2
-
-shuffleCards :: [Card] -> IO [Card]
-shuffleCards cards = flip evalStateT cards $ replicateM (length cards) $ do
-  l <- get
-  s <- randomIO
-  let r = s `mod` length l
-  case splitAt r l of
-    (beg, c:end) -> do
-      put (beg ++ end)
-      return c
-    (_, []) -> error "shuffleCards: la liste était vide. Ceci n'aurait pas dû se produire..."
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

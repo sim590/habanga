@@ -11,12 +11,15 @@
   des mécanismes de jeu devrait être écrit sous ce module.
 -}
 
-module Game ( initialize
+module Game ( initializeIO
+            , initialize
+            , reInitialize
             , winner
             , processPlayerTurnAction
             , RangeBoundary (..)
             ) where
 
+import Data.Either.Extra
 import qualified Data.List as List
 
 import Control.Monad
@@ -24,10 +27,18 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.State
 import Control.Lens
 
+import System.Random
+
+import Random
 import Cards
 import GameState
 
 data RangeBoundary = LeftBoundary | RightBoundary
+
+initializeIO
+  :: [String]     -- ^ Les noms des différents joueurs.
+  -> IO GameState -- ^ L'état du jeu résutlant
+initializeIO playerNames = getStdGen >>= initialize playerNames
 
 {-| Fait l'initialisation de l'état du jeu.
 
@@ -37,32 +48,42 @@ data RangeBoundary = LeftBoundary | RightBoundary
   performant des tirages de carte depuis le paquet de carte.
 -}
 initialize
-  :: [String] -- ^ Les noms des différents joueurs.
+  :: RandomGen gen
+  => [String] -- ^ Les noms des différents joueurs.
+  -> gen
   -> IO GameState
-initialize playerNames = do
-  startingRangesCardsShuffled <- shuffleCards startingRangesCardList
-  let theCardsOnTable     = CardsOnTable (startingRangesCardsShuffled !! 0, startingRangesCardsShuffled !! 1)
-                                         (startingRangesCardsShuffled !! 2, startingRangesCardsShuffled !! 3)
-                                         (startingRangesCardsShuffled !! 4, startingRangesCardsShuffled !! 5)
-                                         (startingRangesCardsShuffled !! 6, startingRangesCardsShuffled !! 7)
-      initialPlayerStates = map (\ n -> PlayerState n [] Nothing) playerNames
-  shuffledDeck <- shuffleCards unshuffledDeck
+initialize playerNames gen = do
+  let
+    theCardsOnTable             = CardsOnTable (startingRangesCardsShuffled !! 0, startingRangesCardsShuffled !! 1)
+                                               (startingRangesCardsShuffled !! 2, startingRangesCardsShuffled !! 3)
+                                               (startingRangesCardsShuffled !! 4, startingRangesCardsShuffled !! 5)
+                                               (startingRangesCardsShuffled !! 6, startingRangesCardsShuffled !! 7)
+    startingRangesCardsShuffled = deterministiclyShuffle startingRangesCardList gen
+    shuffledDeck                = deterministiclyShuffle unshuffledDeck gen
+    initialPlayerStates         = map (\ n -> PlayerState n [] Nothing) playerNames
 
   let initialGameState = GameState theCardsOnTable shuffledDeck initialPlayerStates
   flip execStateT initialGameState $ replicateM_ (length playerNames) $ do
     drawCards 8
     endPlayerTurn
 
+reInitialize :: RandomGen gen => [String] -> GameState -> gen -> IO GameState
+reInitialize playerNames gs gen = initialize playerNames gen >>= \ gs' -> return $ gs
+  & cardsOnTable .~ gs' ^. cardsOnTable
+  & deck         .~ gs' ^. deck
+  & players      .~ gs' ^. players
+
 {-| Exécute toute les actions nécessaires lors de la terminaison du tour
    du joueur.
 -}
 endPlayerTurn :: (MonadState s m, GameStated s) => m ()
 endPlayerTurn = do
-  let cycleAround (p:others) = others ++ [p]
-      cycleAround [] = error "endPlayerTurn: aucun joueur!"
-      sortByColor  = List.sortBy (\ c0 c1 -> compare (c0^.color) (c1^.color))
-      groupByColor = List.groupBy (\ c0 c1 -> c0^.color == c1^.color)
-      sortByColorThenValues = concat . over traverse List.sort . groupByColor . sortByColor
+  let
+    cycleAround (p:others) = others ++ [p]
+    cycleAround []         = error "endPlayerTurn: aucun joueur!"
+    sortByColor            = List.sortBy (\ c0 c1 -> compare (c0^.color) (c1^.color))
+    groupByColor           = List.groupBy (\ c0 c1 -> c0^.color == c1^.color)
+    sortByColorThenValues  = concat . over traverse List.sort . groupByColor . sortByColor
   gameStateLens . players . _head . cardsInHand %= sortByColorThenValues
   gameStateLens . players %= cycleAround
 
@@ -94,13 +115,15 @@ winner = do
 
    La fonction retourne le nombre de cartes pigées par le joueur à la fin de son tour.
 -}
+
 processPlayerTurnAction
   :: (MonadState s m, GameStated s)
-  => Card          -- ^ La carte jouée par le joueur.
-  -> RangeBoundary -- ^ Le côté où placer la carte du joueur (gauche/droite) selon la couleur de
-                   --   celle-ci.
+  => Either Card Card -- ^ La carte jouée par le joueur. Le type `Either` nous indique si la carte est jouée à gauche ou
+                      --   à droite.
   -> MaybeT m Int
-processPlayerTurnAction card side = do
+processPlayerTurnAction eitherCard = do
+  let
+    card = fromEither eitherCard
   thePlayers <- use $ gameStateLens . players
   when (null thePlayers) $ error "processPlayerTurnAction: aucun joueur lors de l'exécution du tour d'un joueur?"
 
@@ -111,16 +134,16 @@ processPlayerTurnAction card side = do
 
   (gameStateLens . players . _head . cardsInHand) %= List.delete card
 
-  let boundaryLens = case side of
-                       LeftBoundary  -> _1
-                       RightBoundary -> _2
+  let boundaryLens = case eitherCard of
+       Left {}  -> _1
+       Right {} -> _2
 
   let colorLens c = case c^.color of
-                      Just Red    -> red
-                      Just Yellow -> yellow
-                      Just Blue   -> blue
-                      Just Purple -> purple
-                      Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
+        Just Red    -> red
+        Just Yellow -> yellow
+        Just Blue   -> blue
+        Just Purple -> purple
+        Nothing     -> error "processPlayerTurnAction: la carte d'un des joueurs n'avait pas de couleur."
 
 
   gameStateLens . cardsOnTable . colorLens card . boundaryLens .= card

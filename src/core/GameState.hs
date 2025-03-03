@@ -14,12 +14,13 @@
 module GameState where
 
 import Data.Default
-import qualified Data.List as List
 
 import Control.Lens
+import Control.Monad.IO.Class
+import Control.Concurrent.STM
 
 import Cards
-
+import NetworkState
 
 data CardsOnTable = CardsOnTable { _red    :: (Card, Card)
                                  , _yellow :: (Card, Card)
@@ -44,9 +45,17 @@ data GameState = GameState { _cardsOnTable :: CardsOnTable
                            , _deck         :: [Card]
                            , _players      :: [PlayerState]
                            }
+               | OnlineGameState { _cardsOnTable :: CardsOnTable
+                                 , _deck         :: [Card]
+                                 , _players      :: [PlayerState]
+                                 , _networkState :: TVar NetworkState
+                                 }
 makeLenses ''GameState
 
 class GameStated a where
+  -- TODO: de façon à utiliser TVar
+  -- getGameState :: a -> IO GameState
+  -- setGameState :: a -> GameState -> IO a
   getGameState :: a -> GameState
   setGameState :: a -> GameState -> a
 
@@ -58,22 +67,35 @@ instance Default GameState where
   def = GameState def [] []
 
 instance Show CardsOnTable where
-  show cs = List.intercalate "\n" [ "Red: "    ++ "\n\t" ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)
-                                  , "Yellow: " ++ "\n\t" ++ show (cs^.yellow._1.value) ++ ", " ++ show (cs^.yellow._2.value)
-                                  , "Blue: "   ++ "\n\t" ++ show (cs^.blue._1.value)   ++ ", " ++ show (cs^.blue._2.value)
-                                  , "Purple: " ++ "\n\t" ++ show (cs^.purple._1.value) ++ ", " ++ show (cs^.purple._2.value)
-                                  ]
+  show cs = unlines [ "Red:"
+                    , "    " ++ show (cs^.red._1.value)    ++ ", " ++ show (cs^.red._2.value)
+                    , "Yellow:"
+                    , "    " ++ show (cs^.yellow._1.value) ++ ", " ++ show (cs^.yellow._2.value)
+                    , "Blue:"
+                    , "    " ++ show (cs^.blue._1.value)   ++ ", " ++ show (cs^.blue._2.value)
+                    , "Purple:"
+                    , "    " ++ show (cs^.purple._1.value) ++ ", " ++ show (cs^.purple._2.value)
+                    ]
 
 instance Show GameState where
-  show gs = List.intercalate "\n" [ "Deck: "      ++ "\n" ++ "\t" ++ show (gs^.deck)
-                                  , "Players: "
-                                  ]
-         ++ "\n"
-         ++ List.intercalate "\n" (map (("\t"++) . show) (gs^.players))
-         ++ "\n"
-         ++ List.intercalate "\n" [ "Cards on table:"
-                                  , List.intercalate "\n" $ map ("\t"++) (lines (show $ gs^.cardsOnTable))
-                                  ]
+  show gs = unlines [ "Deck:"
+                    , "    " ++ show (gs^.deck)
+                    , "Players: "
+                    ]
+            ++ "\n"
+            ++ unlines (map (("    "++) . show) (gs^.players))
+            ++ "\n"
+            ++ unlines [ "Cards on table:"
+                      , unlines $ map ("    "++) (lines (show $ gs^.cardsOnTable))
+                      ]
+
+defaultOnlineGameState :: MonadIO m => m GameState
+defaultOnlineGameState = liftIO (newTVarIO def) >>= \ nsTV ->
+  return OnlineGameState { _cardsOnTable = def ^. cardsOnTable
+                         , _deck         = def ^. deck
+                         , _players      = def ^. players
+                         , _networkState = nsTV
+                         }
 
 {-| Lentille (Lens' s GameState)
 

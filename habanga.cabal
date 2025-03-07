@@ -50,7 +50,7 @@ common common-base
                         containers   ^>= 0.6.7,
                         data-default ^>= 0.8.0,
                         stm,
-                        extra
+                        extra,
 common common-exe
     ghc-options:        -threaded
 
@@ -98,6 +98,8 @@ executable habanga-tui
                         Widgets
     build-depends:      habanga-core,
                         text       ^>= 2.0.2,
-                        file-embed ^>= 0.0.16
+                        file-embed ^>= 0.0.16,
+                        opendht-hs,
+                        directory
     hs-source-dirs:     src/tui
 

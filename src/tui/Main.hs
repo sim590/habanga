@@ -14,7 +14,10 @@ import Data.Maybe
 import Data.Default
 
 import Control.Monad
+import Control.Monad.Reader
 import Control.Lens
+import Control.Concurrent
+import Control.Concurrent.STM
 
 import Brick.Util (on)
 import Brick.Focus
@@ -30,11 +33,27 @@ import qualified Brick.Main as M
 import Graphics.Vty (defAttr)
 import qualified Graphics.Vty as V
 
+import OpenDHT.DhtRunner ( dhtConfig
+                         , nodeConfig
+                         , persistPath
+                         )
+
+import System.Directory
+
+import GameState
 import ProgramState
+import Network
+import NetworkState
 import Widgets
 
 import qualified MainMenu
 import qualified GameView
+
+myForkIO :: IO () -> IO (MVar ())
+myForkIO io = do
+  mvar <- newEmptyMVar
+  void $ forkFinally io (\_ -> putMVar mvar ())
+  return mvar
 
 appEvent :: BrickEvent AppFocus () -> EventM AppFocus ProgramState ()
 appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
@@ -44,8 +63,9 @@ appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
 
 appChooseCursor :: ProgramState -> [CursorLocation AppFocus] -> Maybe (CursorLocation AppFocus)
 appChooseCursor ps = case focusGetCurrent (ps ^. currentFocus) of
-  Just (MainMenu _) -> focusRingCursor formFocus $ (ps ^. mainMenuState . submenu) ^?! _Just . gameForm
-  _                 -> const Nothing
+  Just (MainMenu (GameInitializationForm _))       -> focusRingCursor formFocus $ (ps ^. mainMenuState . submenu) ^?! _Just . gameForm
+  Just (MainMenu (OnlineGameInitializationForm _)) -> focusRingCursor formFocus $ (ps ^. mainMenuState . submenu) ^?! _Just . onlineGameForm
+  _                                                -> const Nothing
 
 attrsMap :: AttrMap
 attrsMap = attrMap defAttr $ [ (attrName "selectedAttr",       V.black   `on` V.white)
@@ -80,7 +100,17 @@ app = M.App { M.appDraw         = drawUI
 
 main :: IO ()
 main = do
+  gs               <- defaultOnlineGameState
+  habangaCachePath <- getXdgDirectory XdgCache "habanga"
+  createDirectoryIfMissing True habangaCachePath
+
+  let dhtRunnerConf = def & dhtConfig.nodeConfig.persistPath .~ (habangaCachePath <> "/dht.cache")
+  -- mv <- myForkIO $ runReaderT (Network.loop dhtRunnerConf) (gs^?!networkState)
+
   void $ M.defaultMain app def { _programResources = def }
+
+  -- atomically $ modifyTVar (gs^?!networkState) $ status .~ ShuttingDown
+  -- readMVar mv
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

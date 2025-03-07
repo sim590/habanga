@@ -55,8 +55,12 @@ instance Default ProgramResources where
 data GameInitializationFormElement = GameInitializationFormPlayerNamesField
   deriving (Eq, Ord, Show, Enum)
 
+data OnlineGameInitializationFormElement = OnlineGameInitializationFormMyNameField
+  deriving (Eq, Ord, Show, Enum)
+
 data MainMenuFocusableElement = MainMenuButtons
                               | GameInitializationForm GameInitializationFormElement
+                              | OnlineGameInitializationForm OnlineGameInitializationFormElement
                               deriving (Eq, Ord, Show)
 
 data GameFocusableSubElement = GameLog
@@ -74,8 +78,17 @@ makeLenses ''GameInitializationInfo
 instance Default GameInitializationInfo where
   def = GameInitializationInfo mempty
 
-newtype MainMenuSubMenu = GameInitialization { _gameForm :: Form GameInitializationInfo () AppFocus
-                                             }
+newtype OnlineGameInitializationInfo = OnlineGameInitializationInfo { _myPlayerName :: T.Text }
+  deriving Show
+makeLenses ''OnlineGameInitializationInfo
+
+instance Default OnlineGameInitializationInfo where
+  def = OnlineGameInitializationInfo mempty
+
+data MainMenuSubMenu = GameInitialization { _gameForm :: Form GameInitializationInfo () AppFocus
+                                          }
+                     | OnlineGameInitialization { _onlineGameForm :: Form OnlineGameInitializationInfo () AppFocus
+                                                }
 makeLenses ''MainMenuSubMenu
 
 data MainMenuState = MainMenuState { _mainMenuIndex :: Int
@@ -110,6 +123,7 @@ instance Default ProgramState where
                      , _gameViewState    = def
                      , _currentFocus     = focusRing [ MainMenu MainMenuButtons
                                                      , MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
+                                                     , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
                                                      , OptionsMenu
                                                      , Game Nothing
                                                      ]

@@ -20,6 +20,7 @@ import Data.Default
 import Data.FileEmbed
 
 import Control.Lens
+import Control.Concurrent
 
 import Brick.Forms
 import Brick.Focus
@@ -56,6 +57,7 @@ data GameInitializationFormElement = GameInitializationFormPlayerNamesField
   deriving (Eq, Ord, Show, Enum)
 
 data OnlineGameInitializationFormElement = OnlineGameInitializationFormMyNameField
+                                         | OnlineGameInitializationFormNumberOfPlayersField
   deriving (Eq, Ord, Show, Enum)
 
 data MainMenuFocusableElement = MainMenuButtons
@@ -67,9 +69,10 @@ data GameFocusableSubElement = GameLog
   deriving (Eq, Ord, Show)
 
 data AppFocus = MainMenu MainMenuFocusableElement
-                 | OptionsMenu
-                 | Game (Maybe GameFocusableSubElement)
-                 deriving (Eq, Ord, Show)
+              | OnlineGameMenu
+              | OptionsMenu
+              | Game (Maybe GameFocusableSubElement)
+              deriving (Eq, Ord, Show)
 
 newtype GameInitializationInfo = GameInitializationInfo { _playerNamesField :: T.Text }
   deriving Show
@@ -78,15 +81,18 @@ makeLenses ''GameInitializationInfo
 instance Default GameInitializationInfo where
   def = GameInitializationInfo mempty
 
-newtype OnlineGameInitializationInfo = OnlineGameInitializationInfo { _myPlayerName :: T.Text }
+data OnlineGameInitializationInfo = OnlineGameInitializationInfo { _myPlayerName    :: T.Text
+                                                                 , _numberOfPlayers :: Int
+                                                                 }
   deriving Show
 makeLenses ''OnlineGameInitializationInfo
 
 instance Default OnlineGameInitializationInfo where
-  def = OnlineGameInitializationInfo mempty
+  def = OnlineGameInitializationInfo mempty 0
 
 data MainMenuSubMenu = GameInitialization { _gameForm :: Form GameInitializationInfo () AppFocus
                                           }
+                     | OnlineGameSubMenu { _onlineGameMenuIndex :: Int }
                      | OnlineGameInitialization { _onlineGameForm :: Form OnlineGameInitializationInfo () AppFocus
                                                 }
 makeLenses ''MainMenuSubMenu
@@ -113,6 +119,7 @@ data ProgramState = ProgramState { _gameState        :: GameState
                                  , _mainMenuState    :: MainMenuState
                                  , _gameViewState    :: GameViewState
                                  , _currentFocus     :: FocusRing AppFocus
+                                 , _networkMV        :: Maybe (MVar ())
                                  }
 makeLenses ''ProgramState
 
@@ -124,9 +131,11 @@ instance Default ProgramState where
                      , _currentFocus     = focusRing [ MainMenu MainMenuButtons
                                                      , MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
                                                      , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
+                                                     , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
                                                      , OptionsMenu
                                                      , Game Nothing
                                                      ]
+                     , _networkMV        = Nothing
                      }
 
 instance GameStated ProgramState where

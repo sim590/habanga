@@ -18,6 +18,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Network ( loop
+               , forkFinallyWithMvar
                ) where
 
 import GHC.Generics
@@ -55,6 +56,12 @@ import qualified OpenDHT.DhtRunner as DhtRunner
 
 import Cards
 import NetworkState
+
+forkFinallyWithMvar :: IO () -> IO (MVar ())
+forkFinallyWithMvar io = do
+  mvar <- newEmptyMVar
+  void $ forkFinally io (\_ -> putMVar mvar ())
+  return mvar
 
 -- Le temps de pause de la boucle en microsecondes
 _MAIN_LOOP_THREAD_SLEEP_TIME_ :: Int

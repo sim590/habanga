@@ -13,8 +13,6 @@ module Main where
 import Data.Maybe
 import Data.Default
 
-import Control.Monad
-import Control.Monad.Reader
 import Control.Lens
 import Control.Concurrent
 import Control.Concurrent.STM
@@ -42,18 +40,11 @@ import System.Directory
 
 import GameState
 import ProgramState
-import Network
 import NetworkState
 import Widgets
 
 import qualified MainMenu
 import qualified GameView
-
-myForkIO :: IO () -> IO (MVar ())
-myForkIO io = do
-  mvar <- newEmptyMVar
-  void $ forkFinally io (\_ -> putMVar mvar ())
-  return mvar
 
 appEvent :: BrickEvent AppFocus () -> EventM AppFocus ProgramState ()
 appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
@@ -104,13 +95,11 @@ main = do
   habangaCachePath <- getXdgDirectory XdgCache "habanga"
   createDirectoryIfMissing True habangaCachePath
 
-  let dhtRunnerConf = def & dhtConfig.nodeConfig.persistPath .~ (habangaCachePath <> "/dht.cache")
-  -- mv <- myForkIO $ runReaderT (Network.loop dhtRunnerConf) (gs^?!networkState)
+  finalProgramState <- M.defaultMain app $ def & programResources .~ def
+                                               & gameState        .~ gs
 
-  void $ M.defaultMain app def { _programResources = def }
-
-  -- atomically $ modifyTVar (gs^?!networkState) $ status .~ ShuttingDown
-  -- readMVar mv
+  atomically $ modifyTVar (gs^?!networkState) $ status .~ ShuttingDown
+  maybe (return ()) readMVar $ finalProgramState ^. networkMV
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

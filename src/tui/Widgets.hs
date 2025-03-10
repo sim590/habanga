@@ -8,7 +8,8 @@
   Maintainer  : sim.desaulniers@gmail.com
 -}
 
-module Widgets ( button
+module Widgets ( NamedButton
+               , button
                , buttonAttrs
                ) where
 
@@ -22,6 +23,9 @@ import Brick.Widgets.Core ( hLimit
                           )
 
 import qualified Graphics.Vty as V
+
+-- Signature de `button` avec son premier paramètre appliqué.
+type NamedButton n = Int -> Int -> Int -> AttrName -> Widget n
 
 buttonAttrs :: [(AttrName, V.Attr)]
 buttonAttrs = [ ]

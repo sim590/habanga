@@ -104,8 +104,8 @@ startGame playerList = do
   gameState <~ liftIO (initializeIO playerList)
   currentFocus %= focusSetCurrent (Game Nothing)
 
-createOnlineGame :: Text.Text -> Int -> T.EventM AppFocus ProgramState ()
-createOnlineGame playerName numberOfPlayers = do
+createOnlineGame :: TVar NetworkState -> Text.Text -> Int -> T.EventM AppFocus ProgramState ()
+createOnlineGame nsTV playerName numberOfPlayers = do
   ps <- get
   unless (isJust (ps^.networkMV)) $ do
     habangaCachePath <- liftIO $ getXdgDirectory XdgCache "habanga"
@@ -115,8 +115,8 @@ createOnlineGame playerName numberOfPlayers = do
     networkMV .= Just mv
   -- TODO: créer la partie et afficher une fenêtre d'attente (avec possibilité d'annuler).
 
-event :: T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
-event ev = do
+event :: TVar NetworkState -> T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
+event nsTV ev = do
   let
     buttonMenuEvents :: MenuButtonActionPairList -> Traversal' ProgramState Int -> T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
     buttonMenuEvents menuButtons menuIndexLens (T.VtyEvent (V.EvKey V.KEnter      [])) = selectEntry menuButtons menuIndexLens
@@ -146,7 +146,7 @@ event ev = do
         validNumberOfPlayers = onlineGameInfo ^. numberOfPlayers > 1 && onlineGameInfo ^. numberOfPlayers <= 6
         numberOfPlayersField = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
       mainMenuState . submenu . _Just . gameForm %= setFieldValid validNumberOfPlayers numberOfPlayersField
-      when validNumberOfPlayers $ createOnlineGame (onlineGameInfo ^. myPlayerName) (onlineGameInfo ^. numberOfPlayers)
+      when validNumberOfPlayers $ createOnlineGame nsTV (onlineGameInfo ^. myPlayerName) (onlineGameInfo ^. numberOfPlayers)
 
     formEvents (OnlineGameInitialization f) _ = do
         f' <- nestEventM' f (handleFormEvent ev)

@@ -16,6 +16,7 @@ import Data.Default
 import Control.Lens
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Monad.IO.Class
 
 import Brick.Util (on)
 import Brick.Focus
@@ -38,7 +39,6 @@ import OpenDHT.DhtRunner ( dhtConfig
 
 import System.Directory
 
-import GameState
 import ProgramState
 import NetworkState
 import Widgets
@@ -46,9 +46,9 @@ import Widgets
 import qualified MainMenu
 import qualified GameView
 
-appEvent :: BrickEvent AppFocus () -> EventM AppFocus ProgramState ()
-appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
-  Just (MainMenu _) -> MainMenu.event e
+appEvent :: TVar NetworkState -> BrickEvent AppFocus () -> EventM AppFocus ProgramState ()
+appEvent nsTV e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
+  Just (MainMenu _) -> MainMenu.event nsTV e
   Just (Game     _) -> GameView.event e
   _                 -> return ()
 
@@ -81,24 +81,23 @@ drawUI ps = case focusGetCurrent (ps^.currentFocus) of
   Just (Game     _) -> GameView.widget ps
   s                 -> error $ "drawUI: l'écran '" <> show (fromJust s) <> "' n'est pas implanté!"
 
-app :: M.App ProgramState () AppFocus
-app = M.App { M.appDraw         = drawUI
+app :: TVar NetworkState -> M.App ProgramState () AppFocus
+app nsTV = M.App { M.appDraw         = drawUI
             , M.appChooseCursor = appChooseCursor
-            , M.appHandleEvent  = appEvent
+                 , M.appHandleEvent  = appEvent nsTV
             , M.appStartEvent   = currentFocus %= focusSetCurrent (MainMenu MainMenuButtons)
             , M.appAttrMap      = const attrsMap
             }
 
 main :: IO ()
 main = do
-  gs               <- defaultOnlineGameState
+  nsTV             <- liftIO (newTVarIO def)
   habangaCachePath <- getXdgDirectory XdgCache "habanga"
   createDirectoryIfMissing True habangaCachePath
 
-  finalProgramState <- M.defaultMain app $ def & programResources .~ def
-                                               & gameState        .~ gs
+  finalProgramState <- M.defaultMain (app nsTV) def
 
-  atomically $ modifyTVar (gs^?!networkState) $ status .~ ShuttingDown
+  atomically $ modifyTVar nsTV $ status .~ ShuttingDown
   maybe (return ()) readMVar $ finalProgramState ^. networkMV
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :

@@ -8,6 +8,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Default
 
+import Control.Concurrent.STM.TVar
+import Control.Concurrent.STM.TChan
 import Control.Lens
 
 import Cards
@@ -89,6 +91,13 @@ instance Show NetworkState where
                     , "MyName:       " <> ns ^. myName
                     , "MyPlayerRank: " <> show (ns ^. myPlayerRank)
                     ]
+
+newtype NetworkChannelUpdate = NetworkChannelUpdate NetworkState
+
+data NetworkStateChannelData = NetworkStateChannelData { _networkState  :: TVar NetworkState
+                                                       , _updateChannel :: TChan NetworkChannelUpdate
+                                                       }
+makeLenses ''NetworkStateChannelData
 
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ :: Int
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ = 6

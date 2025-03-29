@@ -23,6 +23,7 @@ import Data.Maybe
 import Control.Lens
 import Control.Monad.State
 import Control.Monad.Reader
+import Control.Concurrent.STM
 
 import Brick.Util
 import Brick.AttrMap
@@ -68,6 +69,8 @@ import Widgets
 import Game
 import GameState
 import Network
+import NetworkState (NetworkState)
+import qualified NetworkState as NS
 
 type MenuButtonActionPairList = [(NamedButton AppFocus, T.EventM AppFocus ProgramState ())]
 
@@ -107,7 +110,8 @@ createOnlineGame playerName numberOfPlayers = do
   unless (isJust (ps^.networkMV)) $ do
     habangaCachePath <- liftIO $ getXdgDirectory XdgCache "habanga"
     let dhtRunnerConf = def & dhtConfig.nodeConfig.persistPath .~ (habangaCachePath <> "/dht.cache")
-    mv <- liftIO $ forkFinallyWithMvar $ runReaderT (Network.loop dhtRunnerConf) (ps^?!gameState.networkState)
+    netChan <- liftIO newTChanIO
+    mv <- liftIO $ forkFinallyWithMvar $ runReaderT (Network.loop dhtRunnerConf) (NS.NetworkStateChannelData nsTV netChan)
     networkMV .= Just mv
   -- TODO: créer la partie et afficher une fenêtre d'attente (avec possibilité d'annuler).
 

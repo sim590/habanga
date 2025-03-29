@@ -96,6 +96,7 @@ executable habanga-tui
                         MainMenu,
                         GameView,
                         Widgets
+                        BrickNetworkBridge
     build-depends:      habanga-core,
                         text       ^>= 2.0.2,
                         file-embed ^>= 0.0.16,

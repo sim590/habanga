@@ -120,10 +120,8 @@ event ev = do
     buttonMenuEvents menuButtons menuIndexLens (T.VtyEvent (V.EvKey (V.KChar 'j') [])) = goDown menuButtons menuIndexLens
     buttonMenuEvents _           menuIndexLens (T.VtyEvent (V.EvKey V.KUp         [])) = goUp menuIndexLens
     buttonMenuEvents _           menuIndexLens (T.VtyEvent (V.EvKey (V.KChar 'k') [])) = goUp menuIndexLens
-    buttonMenuEvents _           _             (T.VtyEvent (V.EvKey V.KEsc        [])) = goBackOrQuit
     buttonMenuEvents _           _             (T.VtyEvent (V.EvKey (V.KChar 'q') [])) = goBackOrQuit
     buttonMenuEvents _           _             _                                       = return ()
-
 
     formEvents _  (T.VtyEvent (V.EvKey V.KEsc [])) = goBackOrQuit
 

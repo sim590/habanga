@@ -132,10 +132,10 @@ newNetworkStatusSafe nStatus ns = let currentNetworkStatus = ns ^. status in cas
   _                 -> nStatus
 
 atomicallyHandleStateUpdate :: NetworkStateChannelData -> STM a -> IO a
-atomicallyHandleStateUpdate (NetworkStateChannelData nsTV chan) stateAction = do
-  a  <- atomically stateAction
-  ns <- readTVarIO nsTV
-  atomically $ writeTChan chan (NetworkChannelUpdate ns)
+atomicallyHandleStateUpdate (NetworkStateChannelData nsTV chan) stateAction = atomically $ do
+  a  <- stateAction
+  ns <- readTVar nsTV
+  writeTChan chan (NetworkChannelUpdate ns)
   return a
 
 

@@ -14,6 +14,7 @@
 module GameState where
 
 import Data.Default
+import qualified Data.List as List
 
 import Control.Lens
 
@@ -85,6 +86,9 @@ instance Show GameState where
 gameStateLens :: (GameStated s, Functor f)
               => (GameState -> f GameState) -> s -> f s --
 gameStateLens g s = fmap (setGameState s) (g $ getGameState s)
+
+playerRank :: String -> GameState -> Maybe Int
+playerRank pname gs = List.elemIndex pname $ map (view name) (gs^.players)
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

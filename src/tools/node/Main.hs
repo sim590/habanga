@@ -112,7 +112,7 @@ executeCmd = do
       gs' <- liftIO $ reInitialize shuffledPlayerNames gs gen
       gameState .= gs'
       let
-        myRank = fromJust $ List.elemIndex (netState^.myName) $ map (view name) (gs'^.players)
+        myRank = fromJust $ playerRank (netState^.myName) gs'
       liftIO $ atomically $ modifyTVar nsTV $ status .~ Request (GameStart myRank)
     playTurn = case args of
       [n, strColor, slot] -> do

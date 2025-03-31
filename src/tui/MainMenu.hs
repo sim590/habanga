@@ -60,13 +60,11 @@ import Brick.Widgets.Core ( Padding (Pad)
 
 import qualified Graphics.Vty as V
 
-import OpenDHT.Types
-import OpenDHT.InfoHash
-
 import ProgramState
 import Widgets
 
 import Game
+import qualified OnlineGame
 import Network (forkFinallyWithMvar)
 import qualified Network
 import qualified BrickNetworkBridge
@@ -104,36 +102,22 @@ goBackOrQuit = use (mainMenuState.submenu) >>= \ case
   Just (OnlineLobby _)                -> mainMenuState.submenu .= Just (OnlineGameSubMenu 0)
   _                                   -> M.halt
 
-withNetwork :: TVar NetworkState -> T.EventM AppFocus ProgramState ()
-withNetwork nsTV = get >>= \ ps -> unless (isJust (ps ^. networkMV)) $ do
+withNetwork :: TVar NetworkState -> T.EventM AppFocus ProgramState () -> T.EventM AppFocus ProgramState ()
+withNetwork nsTV actionRequiringNetwork = get >>= \ ps -> do
+  unless (isJust (ps ^. networkMV)) $ do
   netChan <- liftIO newTChanIO
   nMV     <- liftIO $ forkFinallyWithMvar $ runReaderT (Network.loop def) (NS.NetworkStateChannelData nsTV netChan)
   bnbMV   <- liftIO $ do
     forkFinallyWithMvar $ BrickNetworkBridge.loop netChan (ps ^?! brickEventChannel . _Just)
   networkMV            .= Just nMV
   brickNetworkBridgeMV .= Just bnbMV
+  actionRequiringNetwork
 
 startGame :: [String] -> T.EventM AppFocus ProgramState ()
 startGame playerList = do
   -- FIXME: il faudra utiliser initialize avec un générateur basé sur le code de la partie.
   gameState <~ liftIO (initializeIO playerList)
   currentFocus %= focusSetCurrent (Game Nothing)
-
-createOnlineGame :: TVar NetworkState -> Text.Text -> Int -> T.EventM AppFocus ProgramState ()
-createOnlineGame nsTV playerName numberOfPlayers' = withNetwork nsTV >> do
-  rHash <- liftIO $ unDht randomInfoHash
-  let
-    gc              = take NS._GAME_CODE_LENGTH_ $ show rHash
-    playerNameStr   = Text.unpack playerName
-    theGameSettings = NS.OnlineGameSettings gc numberOfPlayers'
-  Network.requestNetwork nsTV $ NS.GameAnnounce theGameSettings playerNameStr
-
-joinOnlineGame :: TVar NetworkState -> Text.Text -> Text.Text -> T.EventM AppFocus ProgramState ()
-joinOnlineGame nsTV playerName gc = withNetwork nsTV >> do
-  let
-    gc'         = Text.unpack gc
-    playerName' = Text.unpack playerName
-  Network.requestNetwork nsTV $ NS.JoinGame gc' playerName'
 
 event :: TVar NetworkState -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
 event _ (T.AppEvent (BNB.NetworkBrickUpdate ns)) = networkState .= ns
@@ -163,8 +147,8 @@ event nsTV ev = do
     formEvents (OnlineGameInitialization f pRole) (T.VtyEvent (V.EvKey (V.KChar 'g') [V.MCtrl])) = do
       (_, onlineGameInfo) <- nestEventM f $ gets formState
       let
-        playerName = onlineGameInfo ^. myPlayerName
-        validName  = not $ Text.null playerName
+        playerName = Text.unpack $ onlineGameInfo ^. myPlayerName
+        validName  = not $ null playerName
         nameField  = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
       mainMenuState . submenu . _Just . gameForm %= setFieldValid validName nameField
       case pRole of
@@ -176,17 +160,17 @@ event nsTV ev = do
             validFields          = validName && validNumberOfPlayers
           mainMenuState . submenu . _Just . gameForm %= setFieldValid validNumberOfPlayers numberOfPlayersField
           when validFields $ do
-            createOnlineGame nsTV playerName numberOfPlayers'
+            withNetwork nsTV $ OnlineGame.createGame nsTV playerName numberOfPlayers'
             mainMenuState . submenu .= Just (OnlineLobby Host)
         OtherPlayer -> do
           let
-            gc            = onlineGameInfo ^. gameCode
-            validCode     = not $ Text.null gc
+            gc            = Text.unpack $ onlineGameInfo ^. gameCode
+            validCode     = not $ null gc
             validFields   = validName && validCode
             gameCodeField = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormGameCodeField)
           mainMenuState . submenu . _Just . gameForm %= setFieldValid validCode gameCodeField
           when validFields $ do
-            joinOnlineGame nsTV playerName gc
+            withNetwork nsTV $ OnlineGame.joinGame nsTV playerName gc
             mainMenuState . submenu .= Just (OnlineLobby OtherPlayer)
 
     formEvents (OnlineGameInitialization f _) _ = nestEventM' f (handleFormEvent ev) >>= (mainMenuState . submenu . _Just . onlineGameForm .=)

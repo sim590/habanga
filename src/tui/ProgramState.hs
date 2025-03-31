@@ -22,10 +22,13 @@ import Data.FileEmbed
 import Control.Lens
 import Control.Concurrent
 
+import Brick.BChan
 import Brick.Forms
 import Brick.Focus
 
 import GameState
+import NetworkState (NetworkState)
+import qualified BrickNetworkBridge as BNB
 
 _HABANGA_MAX_PLAYER_COUNT_ :: Int
 _HABANGA_MAX_PLAYER_COUNT_ = 6
@@ -58,11 +61,13 @@ data GameInitializationFormElement = GameInitializationFormPlayerNamesField
 
 data OnlineGameInitializationFormElement = OnlineGameInitializationFormMyNameField
                                          | OnlineGameInitializationFormNumberOfPlayersField
+                                         | OnlineGameInitializationFormGameCodeField
   deriving (Eq, Ord, Show, Enum)
 
 data MainMenuFocusableElement = MainMenuButtons
                               | GameInitializationForm GameInitializationFormElement
                               | OnlineGameInitializationForm OnlineGameInitializationFormElement
+                              | OnlineLobbyFocus
                               deriving (Eq, Ord, Show)
 
 data GameFocusableSubElement = GameLog
@@ -83,18 +88,24 @@ instance Default GameInitializationInfo where
 
 data OnlineGameInitializationInfo = OnlineGameInitializationInfo { _myPlayerName    :: T.Text
                                                                  , _numberOfPlayers :: Int
+                                                                 , _gameCode        :: T.Text
                                                                  }
   deriving Show
 makeLenses ''OnlineGameInitializationInfo
 
 instance Default OnlineGameInitializationInfo where
-  def = OnlineGameInitializationInfo mempty 0
+  def = OnlineGameInitializationInfo mempty 0 mempty
 
-data MainMenuSubMenu = GameInitialization { _gameForm :: Form GameInitializationInfo () AppFocus
+data OnlineRole = Host
+                | OtherPlayer
+
+data MainMenuSubMenu = GameInitialization { _gameForm :: Form GameInitializationInfo BNB.NetworkBrickEvent AppFocus
                                           }
                      | OnlineGameSubMenu { _onlineGameMenuIndex :: Int }
-                     | OnlineGameInitialization { _onlineGameForm :: Form OnlineGameInitializationInfo () AppFocus
+                     | OnlineGameInitialization { _onlineGameForm :: Form OnlineGameInitializationInfo BNB.NetworkBrickEvent AppFocus
+                                                , _playerRole     :: OnlineRole
                                                 }
+                     | OnlineLobby OnlineRole
 makeLenses ''MainMenuSubMenu
 
 data MainMenuState = MainMenuState { _mainMenuIndex :: Int
@@ -114,28 +125,36 @@ makeLenses ''GameViewState
 instance Default GameViewState where
   def = GameViewState 0 Nothing []
 
-data ProgramState = ProgramState { _gameState        :: GameState
-                                 , _programResources :: ProgramResources
-                                 , _mainMenuState    :: MainMenuState
-                                 , _gameViewState    :: GameViewState
-                                 , _currentFocus     :: FocusRing AppFocus
-                                 , _networkMV        :: Maybe (MVar ())
+data ProgramState = ProgramState { _gameState            :: GameState
+                                 , _networkState         :: NetworkState
+                                 , _programResources     :: ProgramResources
+                                 , _mainMenuState        :: MainMenuState
+                                 , _gameViewState        :: GameViewState
+                                 , _currentFocus         :: FocusRing AppFocus
+                                 , _brickEventChannel    :: Maybe (BChan BNB.NetworkBrickEvent)
+                                 , _networkMV            :: Maybe (MVar ())
+                                 , _brickNetworkBridgeMV :: Maybe (MVar ())
                                  }
 makeLenses ''ProgramState
 
 instance Default ProgramState where
-  def = ProgramState { _gameState        = def
-                     , _programResources = def
-                     , _mainMenuState    = def
-                     , _gameViewState    = def
-                     , _currentFocus     = focusRing [ MainMenu MainMenuButtons
-                                                     , MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
-                                                     , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
-                                                     , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
-                                                     , OptionsMenu
-                                                     , Game Nothing
-                                                     ]
-                     , _networkMV        = Nothing
+  def = ProgramState { _gameState            = def
+                     , _networkState         = def
+                     , _programResources     = def
+                     , _mainMenuState        = def
+                     , _gameViewState        = def
+                     , _currentFocus         = focusRing [ MainMenu MainMenuButtons
+                                                         , MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
+                                                         , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
+                                                         , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
+                                                         , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormGameCodeField)
+                                                         , MainMenu OnlineLobbyFocus
+                                                         , OptionsMenu
+                                                         , Game Nothing
+                                                         ]
+                     , _brickEventChannel    = Nothing
+                     , _networkMV            = Nothing
+                     , _brickNetworkBridgeMV = Nothing
                      }
 
 instance GameStated ProgramState where

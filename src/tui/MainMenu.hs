@@ -1,11 +1,13 @@
 
 {-|
-  Module      : MainMenu
-  Description : Interface texte de l'écran du menu
-  Copyright   : (c) Simon Désaulniers, 2025
-  License     : GPL-3
+  Module       : MainMenu
+  Description  : Interface texte de l'écran du menu
+  Copyright    : (c) Simon Désaulniers, 2025
+  License      : GPL-3
 
-  Maintainer  : sim.desaulniers@gmail.com
+  Maintainer   : sim.desaulniers@gmail.com
+  Contributors : Simon Désaulniers
+                 Xeno Kappel
 -}
 
 {-# LANGUAGE LambdaCase #-}
@@ -19,6 +21,7 @@ module MainMenu ( event
 import qualified Data.Text as Text
 import Data.Default
 import Data.Maybe
+import qualified Data.Map as Map
 
 import Control.Lens
 import Control.Monad.State
@@ -31,7 +34,7 @@ import Brick.Forms
 import Brick.Focus ( focusSetCurrent
                    )
 import qualified Brick.Types as T
-import Brick.Types (Widget
+import Brick.Types ( Widget
                    , nestEventM
                    , nestEventM'
                    )
@@ -45,6 +48,7 @@ import Brick.Widgets.Core ( Padding (Pad)
                           , padLeft
                           , hLimit
                           , vLimit
+                          , vLimitPercent
                           , withAttr
                           , withBorderStyle
                           , str
@@ -56,19 +60,17 @@ import Brick.Widgets.Core ( Padding (Pad)
 
 import qualified Graphics.Vty as V
 
-import OpenDHT.DhtRunner ( dhtConfig
-                         , nodeConfig
-                         , persistPath
-                         )
-
-import System.Directory
+import OpenDHT.Types
+import OpenDHT.InfoHash
 
 import ProgramState
 import Widgets
 
 import Game
-import GameState
-import Network
+import Network (forkFinallyWithMvar)
+import qualified Network
+import qualified BrickNetworkBridge
+import qualified BrickNetworkBridge as BNB
 import NetworkState (NetworkState)
 import qualified NetworkState as NS
 
@@ -91,12 +93,25 @@ selectEntry menuButtons menuIndexLens = do
   let maction = mi >>= \ i -> over traverse snd menuButtons ^? ix i
   fromMaybe (return ()) maction
 
+resetNetwork :: MonadIO m =>  TVar NetworkState -> m ()
+resetNetwork nsTV = Network.requestNetwork nsTV NS.ResetNetwork
+
 goBackOrQuit :: T.EventM AppFocus ProgramState ()
 goBackOrQuit = use (mainMenuState.submenu) >>= \ case
-  Just (GameInitialization _)       -> mainMenuState.submenu .= Nothing
-  Just (OnlineGameSubMenu _)        -> mainMenuState.submenu .= Nothing
-  Just (OnlineGameInitialization _) -> mainMenuState.submenu .= Just (OnlineGameSubMenu 0)
-  _                                 -> M.halt
+  Just (GameInitialization _)         -> mainMenuState.submenu .= Nothing
+  Just (OnlineGameSubMenu _)          -> mainMenuState.submenu .= Nothing
+  Just (OnlineGameInitialization _ _) -> mainMenuState.submenu .= Just (OnlineGameSubMenu 0)
+  Just (OnlineLobby _)                -> mainMenuState.submenu .= Just (OnlineGameSubMenu 0)
+  _                                   -> M.halt
+
+withNetwork :: TVar NetworkState -> T.EventM AppFocus ProgramState ()
+withNetwork nsTV = get >>= \ ps -> unless (isJust (ps ^. networkMV)) $ do
+  netChan <- liftIO newTChanIO
+  nMV     <- liftIO $ forkFinallyWithMvar $ runReaderT (Network.loop def) (NS.NetworkStateChannelData nsTV netChan)
+  bnbMV   <- liftIO $ do
+    forkFinallyWithMvar $ BrickNetworkBridge.loop netChan (ps ^?! brickEventChannel . _Just)
+  networkMV            .= Just nMV
+  brickNetworkBridgeMV .= Just bnbMV
 
 startGame :: [String] -> T.EventM AppFocus ProgramState ()
 startGame playerList = do
@@ -105,20 +120,26 @@ startGame playerList = do
   currentFocus %= focusSetCurrent (Game Nothing)
 
 createOnlineGame :: TVar NetworkState -> Text.Text -> Int -> T.EventM AppFocus ProgramState ()
-createOnlineGame nsTV playerName numberOfPlayers = do
-  ps <- get
-  unless (isJust (ps^.networkMV)) $ do
-    habangaCachePath <- liftIO $ getXdgDirectory XdgCache "habanga"
-    let dhtRunnerConf = def & dhtConfig.nodeConfig.persistPath .~ (habangaCachePath <> "/dht.cache")
-    netChan <- liftIO newTChanIO
-    mv <- liftIO $ forkFinallyWithMvar $ runReaderT (Network.loop dhtRunnerConf) (NS.NetworkStateChannelData nsTV netChan)
-    networkMV .= Just mv
-  -- TODO: créer la partie et afficher une fenêtre d'attente (avec possibilité d'annuler).
+createOnlineGame nsTV playerName numberOfPlayers' = withNetwork nsTV >> do
+  rHash <- liftIO $ unDht randomInfoHash
+  let
+    gc              = take NS._GAME_CODE_LENGTH_ $ show rHash
+    playerNameStr   = Text.unpack playerName
+    theGameSettings = NS.OnlineGameSettings gc numberOfPlayers'
+  Network.requestNetwork nsTV $ NS.GameAnnounce theGameSettings playerNameStr
 
-event :: TVar NetworkState -> T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
+joinOnlineGame :: TVar NetworkState -> Text.Text -> Text.Text -> T.EventM AppFocus ProgramState ()
+joinOnlineGame nsTV playerName gc = withNetwork nsTV >> do
+  let
+    gc'         = Text.unpack gc
+    playerName' = Text.unpack playerName
+  Network.requestNetwork nsTV $ NS.JoinGame gc' playerName'
+
+event :: TVar NetworkState -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
+event _ (T.AppEvent (BNB.NetworkBrickUpdate ns)) = networkState .= ns
 event nsTV ev = do
   let
-    buttonMenuEvents :: MenuButtonActionPairList -> Traversal' ProgramState Int -> T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
+    buttonMenuEvents :: MenuButtonActionPairList -> Traversal' ProgramState Int -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
     buttonMenuEvents menuButtons menuIndexLens (T.VtyEvent (V.EvKey V.KEnter      [])) = selectEntry menuButtons menuIndexLens
     buttonMenuEvents menuButtons menuIndexLens (T.VtyEvent (V.EvKey V.KDown       [])) = goDown menuButtons menuIndexLens
     buttonMenuEvents menuButtons menuIndexLens (T.VtyEvent (V.EvKey (V.KChar 'j') [])) = goDown menuButtons menuIndexLens
@@ -127,38 +148,61 @@ event nsTV ev = do
     buttonMenuEvents _           _             (T.VtyEvent (V.EvKey (V.KChar 'q') [])) = goBackOrQuit
     buttonMenuEvents _           _             _                                       = return ()
 
-    formEvents _  (T.VtyEvent (V.EvKey V.KEsc [])) = goBackOrQuit
+    formEvents _ (T.VtyEvent (V.EvKey V.KEsc [])) = goBackOrQuit
 
-    formEvents (GameInitialization f)  (T.VtyEvent (V.EvKey (V.KChar 'g') [V.MCtrl])) = do
+    formEvents (GameInitialization f) (T.VtyEvent (V.EvKey (V.KChar 'g') [V.MCtrl])) = do
       (_, gameInfo) <- nestEventM f $ gets formState
       mainMenuState.submenu .= Nothing
       let playerNames = filter (not . null) $ map (Text.unpack . Text.strip) $ Text.lines $ gameInfo ^. playerNamesField
       unless (null playerNames) $ startGame playerNames
 
     formEvents (GameInitialization f) _ = do
-        f' <- nestEventM' f (handleFormEvent ev)
-        mainMenuState . submenu . _Just . gameForm .= f'
+      f' <- nestEventM' f (handleFormEvent ev)
+      mainMenuState . submenu . _Just . gameForm .= f'
 
-    formEvents (OnlineGameInitialization f) (T.VtyEvent (V.EvKey (V.KChar 'g') [V.MCtrl])) = do
+    formEvents (OnlineGameInitialization f pRole) (T.VtyEvent (V.EvKey (V.KChar 'g') [V.MCtrl])) = do
       (_, onlineGameInfo) <- nestEventM f $ gets formState
-      mainMenuState.submenu .= Nothing
       let
-        validNumberOfPlayers = onlineGameInfo ^. numberOfPlayers > 1 && onlineGameInfo ^. numberOfPlayers <= 6
-        numberOfPlayersField = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
-      mainMenuState . submenu . _Just . gameForm %= setFieldValid validNumberOfPlayers numberOfPlayersField
-      when validNumberOfPlayers $ createOnlineGame nsTV (onlineGameInfo ^. myPlayerName) (onlineGameInfo ^. numberOfPlayers)
+        playerName = onlineGameInfo ^. myPlayerName
+        validName  = not $ Text.null playerName
+        nameField  = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
+      mainMenuState . submenu . _Just . gameForm %= setFieldValid validName nameField
+      case pRole of
+        Host -> do
+          let
+            numberOfPlayers'     = onlineGameInfo ^. numberOfPlayers
+            validNumberOfPlayers = numberOfPlayers' > 1 && numberOfPlayers' <= 6
+            numberOfPlayersField = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
+            validFields          = validName && validNumberOfPlayers
+          mainMenuState . submenu . _Just . gameForm %= setFieldValid validNumberOfPlayers numberOfPlayersField
+          when validFields $ do
+            createOnlineGame nsTV playerName numberOfPlayers'
+            mainMenuState . submenu .= Just (OnlineLobby Host)
+        OtherPlayer -> do
+          let
+            gc            = onlineGameInfo ^. gameCode
+            validCode     = not $ Text.null gc
+            validFields   = validName && validCode
+            gameCodeField = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormGameCodeField)
+          mainMenuState . submenu . _Just . gameForm %= setFieldValid validCode gameCodeField
+          when validFields $ do
+            joinOnlineGame nsTV playerName gc
+            mainMenuState . submenu .= Just (OnlineLobby OtherPlayer)
 
-    formEvents (OnlineGameInitialization f) _ = do
-        f' <- nestEventM' f (handleFormEvent ev)
-        mainMenuState . submenu . _Just . onlineGameForm .= f'
+    formEvents (OnlineGameInitialization f _) _ = nestEventM' f (handleFormEvent ev) >>= (mainMenuState . submenu . _Just . onlineGameForm .=)
 
     formEvents _ _ = error "MainMenu.event.formEvents: sous-menu invalide!"
 
+    onlineLobbyEvents (T.VtyEvent (V.EvKey V.KEsc []))        = resetNetwork nsTV >> goBackOrQuit
+    onlineLobbyEvents (T.VtyEvent (V.EvKey (V.KChar 'q') [])) = resetNetwork nsTV >> goBackOrQuit
+    onlineLobbyEvents _                                       = return ()
+
   use (mainMenuState.submenu) >>= \ case
-    Just s@(GameInitialization _)       -> formEvents s ev
-    Just s@(OnlineGameInitialization _) -> formEvents s ev
-    Just (OnlineGameSubMenu _)          -> buttonMenuEvents onlineGameMenuButtons (mainMenuState.submenu._Just.onlineGameMenuIndex) ev
-    _                                   -> buttonMenuEvents mainMenuButtons (mainMenuState.mainMenuIndex) ev
+    Just s@(GameInitialization _)         -> formEvents s ev
+    Just s@(OnlineGameInitialization _ _) -> formEvents s ev
+    Just (OnlineGameSubMenu _)            -> buttonMenuEvents onlineGameMenuButtons (mainMenuState.submenu._Just.onlineGameMenuIndex) ev
+    Just (OnlineLobby _)                  -> onlineLobbyEvents ev
+    _                                     -> buttonMenuEvents mainMenuButtons (mainMenuState.mainMenuIndex) ev
 
 mainMenuButtons :: MenuButtonActionPairList
 mainMenuButtons = [ (button "Jouer",          gameInitializationFormAction)
@@ -181,9 +225,11 @@ onlineGameMenuButtons = [ (button "Créer une partie",   onlineGameCreationActio
                         ]
   where
     onlineGameCreationAction = do
-      mainMenuState.submenu .= Just (OnlineGameInitialization (mkOnlineGameInitializationForm def))
+      mainMenuState.submenu .= let role = Host in Just (OnlineGameInitialization (mkOnlineGameInitializationForm role def) role)
       currentFocus          %= focusSetCurrent (MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField))
-    onlineGameJoinAction = undefined
+    onlineGameJoinAction = do
+      mainMenuState.submenu .= let role = OtherPlayer in Just (OnlineGameInitialization (mkOnlineGameInitializationForm role def) role)
+      currentFocus          %= focusSetCurrent (MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField))
 
 titleWidth :: ProgramState -> Int
 titleWidth ps = length $ head $ lines (ps^.programResources.menuGameTitle)
@@ -197,14 +243,16 @@ mkGameInitializationForm =
                                          @@= editTextField playerNamesField focusedItem mMaxNumNames
                ]
 
-mkOnlineGameInitializationForm :: OnlineGameInitializationInfo -> Form OnlineGameInitializationInfo e AppFocus
-mkOnlineGameInitializationForm =
-    let label s w            = padLeft (Pad 1) $ padBottom (Pad 1) $ vLimit 2 (hLimit 25 $ str s <+> fill ' ') <+> w
-        myNameField          = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
-        numberOfPlayersField = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
-    in newForm [ label "Votre nom"               @@= editTextField myPlayerName myNameField (Just 1)
-               , label "Nombre de joueurs (1-6)" @@= editShowableField numberOfPlayers numberOfPlayersField
-               ]
+mkOnlineGameInitializationForm :: OnlineRole -> OnlineGameInitializationInfo -> Form OnlineGameInitializationInfo e AppFocus
+mkOnlineGameInitializationForm pRole =
+  let label s w             = padLeft (Pad 1) $ padBottom (Pad 1) $ vLimit 2 (hLimit 25 $ str s <+> fill ' ') <+> w
+      myNameField           = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
+      numberOfPlayersField  = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
+      gameCodeField         = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormGameCodeField)
+      playerNameLine        = [ label "Votre nom"               @@= editTextField myPlayerName myNameField (Just 1)        ]
+      formLines Host        = [ label "Nombre de joueurs (2-6)" @@= editShowableField numberOfPlayers numberOfPlayersField ]
+      formLines OtherPlayer = [ label "Le code de la partie"    @@= editTextField gameCode gameCodeField  (Just 1)         ]
+   in newForm $ playerNameLine <> formLines pRole
 
 gameInitializationSubMenu :: ProgramState -> [Widget AppFocus]
 gameInitializationSubMenu ps =
@@ -226,10 +274,9 @@ onlineGameInitializationSubMenu ps =
                      , C.hCenter $ str "Ctrl-g pour valider."
                      ]
    in case ps ^. mainMenuState . submenu of
-     Just (OnlineGameInitialization _) -> [C.centerLayer submenuWidget]
-     _                                 -> []
+     Just (OnlineGameInitialization _ _) -> [C.centerLayer submenuWidget]
+     _                                   -> []
 
--- TODO
 onlineGameSubMenu :: ProgramState -> [Widget AppFocus]
 onlineGameSubMenu ps =
   let
@@ -239,6 +286,26 @@ onlineGameSubMenu ps =
    in case ps ^. mainMenuState . submenu of
      Just (OnlineGameSubMenu _) -> [C.centerLayer submenuWidget]
      _                          -> []
+
+onlineLobby :: ProgramState -> [Widget AppFocus]
+onlineLobby ps =
+  let
+    numberOfPlayersConnected = length $ ps ^. networkState . NS.playersIdentities
+    expectedNumberOfPlayers  = ps ^. networkState . NS.gameSettings . NS.numberOfPlayers
+    gc                       = ps ^. networkState . NS.gameSettings . NS.gameCode
+    windowTitleStr Host      = str $ "En attente des joueurs (" <> show numberOfPlayersConnected <> "/" <> show expectedNumberOfPlayers <>")"
+    windowTitleStr _         = str "En attente de connexion"
+    playersInfo              = Map.toList (ps ^. networkState . NS.playersIdentities)
+    playersNameWidgets       = map (\ (pid,  pname) -> C.hCenter $ str $ pname <> " " <> "(" <> pid <> ")" ) playersInfo
+    playersConnectionWidget  = playersNameWidgets <> [ C.hCenter $ str "..." ]
+    gameCodeWidget           = C.hCenter $ str $ "Code de la partie: " <> gc
+    contentWidget            = C.center $ vBox [ vBox $  [ fill ' ' ] <> playersConnectionWidget <> [ fill ' ', B.hBorder ]
+                                               , vLimitPercent 10 gameCodeWidget
+                                               ]
+    submenuWidget role       = B.borderWithLabel (windowTitleStr role) $ hLimit (titleWidth ps + 4) $ vLimit 10 contentWidget
+   in case ps ^. mainMenuState . submenu of
+     Just (OnlineLobby role) -> [C.centerLayer $ submenuWidget role]
+     _                       -> []
 
 buttonMenu :: MenuButtonActionPairList -> Traversal' ProgramState Int -> ProgramState -> Widget AppFocus
 buttonMenu menuButtons menuIndexLens ps = vBox $ map C.center $ appendArgsToButtons (over traverse fst menuButtons) 25
@@ -257,7 +324,7 @@ widget ps = subMenus <> [ hBox [ leftPanel
                                ]
                         ]
   where
-    subMenus         = onlineGameSubMenu ps <> gameInitializationSubMenu ps <> onlineGameInitializationSubMenu ps
+    subMenus         = gameInitializationSubMenu ps <> onlineGameSubMenu ps <> onlineGameInitializationSubMenu ps <> onlineLobby ps
     sidePanelStyle a = C.center . withBorderStyle BS.unicodeRounded . B.border . withAttr (attrName a) . str
     leftPanel        = sidePanelStyle "bluecard"   $ ps^.programResources.blueCard35x53
     rightPanel       = sidePanelStyle "purplecard" $ ps^.programResources.purpleCard35x53

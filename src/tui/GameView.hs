@@ -49,6 +49,7 @@ import Cards
 import GameState
 import qualified Game
 import ProgramState
+import qualified BrickNetworkBridge as BNB
 
 colorAttrFromCard :: Card -> Bool -> AttrName
 colorAttrFromCard c selected
@@ -106,7 +107,7 @@ playCard side = do
   theWinner <- Game.winner
   gameViewState . winner .= ((^.name) <$> theWinner)
 
-event :: T.BrickEvent AppFocus () -> T.EventM AppFocus ProgramState ()
+event :: T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
 event ev = do
   let
     quitOrNothing (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = goBackOrQuit
@@ -150,10 +151,10 @@ widget ps = winnerDialog ps <> [gameLogWidget] <> gameUI
                                                           $ vLimit 15
                                                           $ hLimit 30
                                                           $ viewport (Game (Just GameLog)) T.Vertical gameLogTextWidget
-    keybindBox         =  vBox $ over traverse (hLimit 50 . hBox)
-                               $ over (traverse.ix 0) (\ w ->  padLeft (Pad 2) w <+> fill ' ')
-                               $ over (traverse.ix 1) (\ w -> w <+> fill ' ')
-                               $ over (traverse.traverse) str keyBindText
+    keybindBox         = vBox $ over traverse (hLimit 50 . hBox)
+                              $ over (traverse.ix 0) (\ w ->  padLeft (Pad 2) w <+> fill ' ')
+                              $ over (traverse.ix 1) (\ w -> w <+> fill ' ')
+                              $ over (traverse.traverse) str keyBindText
     keyBindText        = [ ["gauche/droite", "Sélectionner une carte"]
                          , ["(z)",           "Jouer à gauche"        ]
                          , ["(c)",           "Jouer à droite"        ]

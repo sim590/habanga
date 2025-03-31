@@ -19,6 +19,7 @@ import Control.Concurrent.STM
 import Control.Monad.IO.Class
 
 import Brick.Util (on)
+import Brick.BChan
 import Brick.Focus
 import Brick.Forms
 import Brick.AttrMap
@@ -30,14 +31,9 @@ import Brick.Types ( BrickEvent
 import qualified Brick.Main as M
 
 import Graphics.Vty (defAttr)
+import Graphics.Vty.CrossPlatform (mkVty)
 import qualified Graphics.Vty as V
-
-import OpenDHT.DhtRunner ( dhtConfig
-                         , nodeConfig
-                         , persistPath
-                         )
-
-import System.Directory
+import qualified Graphics.Vty.Config as VConfig
 
 import ProgramState
 import NetworkState
@@ -45,8 +41,9 @@ import Widgets
 
 import qualified MainMenu
 import qualified GameView
+import qualified BrickNetworkBridge as BNB
 
-appEvent :: TVar NetworkState -> BrickEvent AppFocus () -> EventM AppFocus ProgramState ()
+appEvent :: TVar NetworkState -> BrickEvent AppFocus BNB.NetworkBrickEvent -> EventM AppFocus ProgramState ()
 appEvent nsTV e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
   Just (MainMenu _) -> MainMenu.event nsTV e
   Just (Game     _) -> GameView.event e
@@ -81,24 +78,26 @@ drawUI ps = case focusGetCurrent (ps^.currentFocus) of
   Just (Game     _) -> GameView.widget ps
   s                 -> error $ "drawUI: l'écran '" <> show (fromJust s) <> "' n'est pas implanté!"
 
-app :: TVar NetworkState -> M.App ProgramState () AppFocus
+app :: TVar NetworkState -> M.App ProgramState BNB.NetworkBrickEvent AppFocus
 app nsTV = M.App { M.appDraw         = drawUI
-            , M.appChooseCursor = appChooseCursor
+                 , M.appChooseCursor = appChooseCursor
                  , M.appHandleEvent  = appEvent nsTV
-            , M.appStartEvent   = currentFocus %= focusSetCurrent (MainMenu MainMenuButtons)
-            , M.appAttrMap      = const attrsMap
-            }
+                 , M.appStartEvent   = currentFocus %= focusSetCurrent (MainMenu MainMenuButtons)
+                 , M.appAttrMap      = const attrsMap
+                 }
 
 main :: IO ()
 main = do
   nsTV             <- liftIO (newTVarIO def)
-  habangaCachePath <- getXdgDirectory XdgCache "habanga"
-  createDirectoryIfMissing True habangaCachePath
+  brickchan <- liftIO $ newBChan 10
 
-  finalProgramState <- M.defaultMain (app nsTV) def
+  let buildVty = mkVty VConfig.defaultConfig
+  initialVty        <- buildVty
+  finalProgramState <- M.customMain initialVty buildVty (Just brickchan) (app nsTV) $ def { _brickEventChannel = Just brickchan }
 
   atomically $ modifyTVar nsTV $ status .~ ShuttingDown
   maybe (return ()) readMVar $ finalProgramState ^. networkMV
+  maybe (return ()) readMVar $ finalProgramState ^. brickNetworkBridgeMV
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

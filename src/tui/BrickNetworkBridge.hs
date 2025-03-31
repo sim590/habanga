@@ -20,12 +20,13 @@ import Brick.BChan
 
 import NetworkState
 
-newtype NetworkBrickEvent = NetworkUpdate NetworkState
+newtype NetworkBrickEvent = NetworkBrickUpdate NetworkState
 
 updateNetworkState :: TChan NetworkChannelUpdate -> Brick.BChan.BChan NetworkBrickEvent -> IO Bool
 updateNetworkState netChan brickChan = atomically (readTChan netChan) >>= \ (NetworkChannelUpdate ns) -> case ns^.status of
    ShuttingDown -> return False
-   _            -> writeBChan brickChan (NetworkUpdate ns) >> return True
+   _            -> writeBChan brickChan (NetworkBrickUpdate ns) >> return True
+
 
 loop :: TChan NetworkChannelUpdate
      -> Brick.BChan.BChan NetworkBrickEvent

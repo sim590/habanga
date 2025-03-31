@@ -99,6 +99,9 @@ data NetworkStateChannelData = NetworkStateChannelData { _networkState  :: TVar 
                                                        }
 makeLenses ''NetworkStateChannelData
 
+_GAME_CODE_LENGTH_ :: Int
+_GAME_CODE_LENGTH_ = 6
+
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ :: Int
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ = 6
 

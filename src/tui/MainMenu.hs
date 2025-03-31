@@ -27,6 +27,7 @@ import Control.Lens
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Concurrent.STM
+import Control.Concurrent
 
 import Brick.Util
 import Brick.AttrMap
@@ -105,22 +106,28 @@ goBackOrQuit = use (mainMenuState.submenu) >>= \ case
 withNetwork :: TVar NetworkState -> T.EventM AppFocus ProgramState () -> T.EventM AppFocus ProgramState ()
 withNetwork nsTV actionRequiringNetwork = get >>= \ ps -> do
   unless (isJust (ps ^. networkMV)) $ do
-  netChan <- liftIO newTChanIO
-  nMV     <- liftIO $ forkFinallyWithMvar $ runReaderT (Network.loop def) (NS.NetworkStateChannelData nsTV netChan)
-  bnbMV   <- liftIO $ do
-    forkFinallyWithMvar $ BrickNetworkBridge.loop netChan (ps ^?! brickEventChannel . _Just)
-  networkMV            .= Just nMV
-  brickNetworkBridgeMV .= Just bnbMV
+    netChan <- liftIO newTChanIO
+    nMV     <- liftIO $ forkFinallyWithMvar $ runReaderT (Network.loop def) (NS.NetworkStateChannelData nsTV netChan)
+    bnbMV   <- liftIO $ do
+      forkFinallyWithMvar $ BrickNetworkBridge.loop netChan (ps ^?! brickEventChannel . _Just)
+    networkMV            .= Just nMV
+    brickNetworkBridgeMV .= Just bnbMV
   actionRequiringNetwork
 
 startGame :: [String] -> T.EventM AppFocus ProgramState ()
 startGame playerList = do
-  -- FIXME: il faudra utiliser initialize avec un générateur basé sur le code de la partie.
   gameState <~ liftIO (initializeIO playerList)
   currentFocus %= focusSetCurrent (Game Nothing)
 
 event :: TVar NetworkState -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
-event _ (T.AppEvent (BNB.NetworkBrickUpdate ns)) = networkState .= ns
+event nsTV (T.AppEvent (BNB.NetworkBrickUpdate ns)) = networkState .= ns >> do
+  submenu' <- use (mainMenuState.submenu)
+  case (submenu', ns ^. NS.status) of
+    (Just (OnlineLobby _), NS.GameReadyForInitialization) -> do
+      gameState             <~ OnlineGame.startGame nsTV
+      currentFocus          %= focusSetCurrent (Game Nothing)
+      mainMenuState.submenu .= Nothing
+    _ -> return ()
 event nsTV ev = do
   let
     buttonMenuEvents :: MenuButtonActionPairList -> Traversal' ProgramState Int -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()

@@ -1,6 +1,7 @@
 
 module OnlineGame where
 
+import Data.Maybe
 import qualified Data.List as List
 import qualified Data.Map as Map
 
@@ -15,6 +16,8 @@ import System.Random
 import OpenDHT.Types
 import OpenDHT.InfoHash
 
+import Game
+import GameState
 import qualified Network
 import NetworkState
 import Random
@@ -38,6 +41,17 @@ createGame nsTV playerName numberOfPlayers' = do
 
 joinGame :: MonadIO m => TVar NetworkState -> String -> String -> m ()
 joinGame nsTV playerName gc = Network.requestNetwork nsTV $ JoinGame gc playerName
+
+startGame :: MonadIO m => TVar NetworkState -> m GameState
+startGame nsTV = liftIO (readTVarIO nsTV) >>= \ ns -> do
+  let
+    playerName  = ns ^. myName
+    gen         = randomGeneratorFromNetworkState ns
+    shuffPNames = shuffledPlayerNames ns gen
+  gs <- liftIO $ initialize shuffPNames gen
+  let myRank = fromJust $ playerRank playerName gs
+  Network.requestNetwork nsTV $ GameStart myRank
+  return gs
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

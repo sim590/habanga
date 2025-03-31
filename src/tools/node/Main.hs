@@ -103,7 +103,7 @@ executeCmd = do
       let
         shuffPNames = OnlineGame.shuffledPlayerNames netState gen
         gen         = OnlineGame.randomGeneratorFromNetworkState netState
-      gs' <- liftIO $ reInitialize shuffPNames gs gen
+      gs' <- liftIO $ initialize shuffPNames gen
       gameState .= gs'
       let
         myRank = fromJust $ playerRank (netState^.myName) gs'

@@ -13,14 +13,11 @@
 
 module Main where
 
-import qualified Data.List as List
 import Data.Default
 import Data.Maybe
 import qualified Data.Map as Map
 
 import Text.Read
-
-import Numeric
 
 import Control.Monad
 import Control.Monad.Trans.Maybe
@@ -29,8 +26,6 @@ import Control.Monad.Reader
 import Control.Lens
 import Control.Concurrent
 import Control.Concurrent.STM
-
-import System.Random
 
 import Brick.AttrMap
 import Brick.Types ( BrickEvent
@@ -54,12 +49,12 @@ import qualified Brick.Focus as F
 import Graphics.Vty (defAttr)
 import qualified Graphics.Vty as V
 
-import Random
 import Cards
 import Game
 import GameState
 import Network
 import NetworkState
+import qualified OnlineGame
 
 data AppFocus = Input
               | Log
@@ -106,10 +101,9 @@ executeCmd = do
     startGame = do
       netState <- liftIO $ readTVarIO nsTV
       let
-        sortedPlayerNames   = List.sort $ Map.elems $ netState ^. playersIdentities
-        gen                 = mkStdGen (fst $ head $ readHex $ netState^.gameSettings.gameCode)
-        shuffledPlayerNames = deterministiclyShuffle sortedPlayerNames gen
-      gs' <- liftIO $ reInitialize shuffledPlayerNames gs gen
+        shuffPNames = OnlineGame.shuffledPlayerNames netState gen
+        gen         = OnlineGame.randomGeneratorFromNetworkState netState
+      gs' <- liftIO $ reInitialize shuffPNames gs gen
       gameState .= gs'
       let
         myRank = fromJust $ playerRank (netState^.myName) gs'

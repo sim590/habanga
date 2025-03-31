@@ -64,6 +64,7 @@ library habanga-core
     import:             common-base,
                         common-lang
     exposed-modules:    Game
+                        OnlineGame
                         Cards
                         GameState
                         NetworkState

@@ -19,6 +19,7 @@
 
 module Network ( loop
                , forkFinallyWithMvar
+               , requestNetwork
                ) where
 
 import GHC.Generics
@@ -108,6 +109,9 @@ _GAME_SETUP_UTYPE_ = show $ toConstr $ GameSetup mempty
 
 _PLAYER_TURN_UTYPE_ :: String
 _PLAYER_TURN_UTYPE_ = show $ toConstr $ PlayerTurn (Left def) 0
+
+requestNetwork :: MonadIO m => TVar NetworkState -> NetworkRequest -> m ()
+requestNetwork nsTV r = liftIO $ atomically $ modifyTVar nsTV $ status .~ Request r
 
 -- TODO:
 shutdownCb :: ShutdownCallback

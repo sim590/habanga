@@ -6,8 +6,6 @@
   License      : GPL-3
 
   Maintainer   : sim.desaulniers@gmail.com
-  Contributors : Simon Désaulniers
-                 Xeno Kappel
 -}
 
 {-# LANGUAGE LambdaCase #-}

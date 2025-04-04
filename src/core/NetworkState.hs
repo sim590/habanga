@@ -92,6 +92,7 @@ instance Show NetworkState where
                     , "MyID:         " <> ns ^. myID
                     , "MyName:       " <> ns ^. myName
                     , "MyPlayerRank: " <> show (ns ^. myPlayerRank)
+                    , "TurnNumber:   " <> show (ns ^. turnNumber)
                     ]
 
 newtype NetworkChannelUpdate = NetworkChannelUpdate NetworkState

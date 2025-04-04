@@ -53,6 +53,8 @@ data OnlineGameSettings = OnlineGameSettings { _gameCode        :: GameCode
                                              deriving Show
 makeLenses ''OnlineGameSettings
 
+type GameTurn = (Word16, Either Card Card)
+
 data NetworkState = NetworkState { _gameTurns         :: Map Word16 (Either Card Card)
                                  , _playersIdentities :: Map OnlinePlayerID OnlinePlayerName
                                  , _status            :: NetworkStatus
@@ -105,13 +107,13 @@ _GAME_CODE_LENGTH_ = 6
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ :: Int
 _MAX_PLAYER_ID_SIZE_TO_CONSIDER_UNIQUE_ = 6
 
-splitAtMissingTurn :: NetworkState -> Map Word16 (Either Card Card) -> ([(Word16, Either Card Card)], [(Word16, Either Card Card)])
+splitAtMissingTurn :: NetworkState -> Map Word16 (Either Card Card) -> ([GameTurn], [GameTurn])
 splitAtMissingTurn ns gameTurns' = (consecutivePlayerTurns', rest)
   where
     rest = map snd $ dropWhile (uncurry (==)) $ zip (Map.toList gameTurns') consecutivePlayerTurns'
     consecutivePlayerTurns' = consecutivePlayerTurns ns gameTurns'
 
-consecutivePlayerTurns :: NetworkState -> Map Word16 (Either Card Card) -> [(Word16, Either Card Card)]
+consecutivePlayerTurns :: NetworkState -> Map Word16 (Either Card Card) -> [GameTurn]
 consecutivePlayerTurns ns gameTurns' = map fst $ takeWhile turnIsSubsequent $ zip (Map.toList gameTurns') [ns^.turnNumber..]
   where
     turnIsSubsequent ((t',_), t) = t' == t + 1

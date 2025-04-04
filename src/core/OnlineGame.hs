@@ -53,5 +53,12 @@ startGame nsTV = liftIO (readTVarIO nsTV) >>= \ ns -> do
   Network.requestNetwork nsTV $ GameStart myRank
   return gs
 
+consumeConsecutivePlayerTurns :: NetworkState -> ([GameTurn], NetworkState)
+consumeConsecutivePlayerTurns ns = (turnsToConsume, ns')
+  where
+    (turnsToConsume, rest) = splitAtMissingTurn ns (ns ^. gameTurns)
+    ns'                    = ns & gameTurns  .~ Map.fromList rest
+                                & turnNumber +~ fromIntegral (length turnsToConsume)
+
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

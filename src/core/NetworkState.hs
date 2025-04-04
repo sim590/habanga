@@ -14,9 +14,8 @@ import Control.Lens
 
 import Cards
 
-type GameCode = String
-
-type OnlinePlayerID = String
+type GameCode         = String
+type OnlinePlayerID   = String
 type OnlinePlayerName = String
 
 data NetworkFailureType = GameAnnouncementFailure String
@@ -44,6 +43,7 @@ data NetworkStatus = AwaitingRequest
                    | GameOnGoing OnlineGameStatus
                    | GameEnded
                    | ShuttingDown
+                   | Offline
                    | NetworkFailure NetworkFailureType
                    deriving Show
 
@@ -68,15 +68,15 @@ data NetworkState = NetworkState { _gameTurns         :: Map Word16 (Either Card
 makeLenses ''NetworkState
 
 instance Default NetworkState where
-  def = NetworkState { _gameTurns         =  Map.empty
-                     , _playersIdentities =  mempty
-                     , _status            =  AwaitingRequest
-                     , _gameSettings      =  OnlineGameSettings [] 0
-                     , _gameHostID        =  ""
-                     , _turnNumber        =  0
-                     , _myID              =  ""
-                     , _myName            =  ""
-                     , _myPlayerRank      =  0
+  def = NetworkState { _gameTurns         = Map.empty
+                     , _playersIdentities = mempty
+                     , _status            = Offline
+                     , _gameSettings      = OnlineGameSettings [] 0
+                     , _gameHostID        = ""
+                     , _turnNumber        = 0
+                     , _myID              = ""
+                     , _myName            = ""
+                     , _myPlayerRank      = 0
                      }
 
 instance Show NetworkState where

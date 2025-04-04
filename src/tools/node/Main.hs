@@ -143,7 +143,8 @@ executeCmd = do
           gs' <- flip execStateT gs $ do
             runMaybeT $ processPlayerTurnAction ec
           gameState .= gs'
-          liftIO $ atomically $ modifyTVar nsTV $ gameTurns %~ Map.delete n
+          liftIO $ atomically $ modifyTVar nsTV $ \ ns -> ns & gameTurns  %~ Map.delete n
+                                                             & turnNumber +~ 1
         _ -> logText %= (<>["err.. Aucun tour à traiter!"])
     resetNetwork = liftIO $ atomically $ modifyTVar nsTV $ status .~ Request ResetNetwork
     printGameState = do

@@ -178,11 +178,11 @@ gameOnGoingCb ncdata@(NetworkStateChannelData nsTV _) (StoredValue d _ _ _ utype
       | sId == ns ^. myID = (True, ns)
       | otherwise         = (True, ns')
       where
-        ns'                    = ns & gameTurns     .~ gameTurns'
-                                    & status .~ newNetworkStatusSafe networkStatus' ns
-        gameTurns'             = Map.insert tn card (ns^.gameTurns)
-        lastTurnNumber         = fromIntegral $ fst $ last $ consecutivePlayerTurns ns gameTurns'
-        isOurTurn              = lastTurnNumber `mod` (ns ^?! gameSettings . numberOfPlayers) == ns ^?! myPlayerRank
+        ns'            = ns & gameTurns .~ gameTurns'
+                            & status    .~ newNetworkStatusSafe networkStatus' ns
+        gameTurns'     = Map.insert tn card (ns^.gameTurns)
+        lastTurnNumber = fromIntegral $ fst $ last $ consecutivePlayerTurns ns gameTurns'
+        isOurTurn      = lastTurnNumber `mod` (ns ^?! gameSettings . numberOfPlayers) == ns ^?! myPlayerRank
         networkStatus'
           | isOurTurn = GameOnGoing AwaitingPlayerTurn
           | otherwise = ns ^. status

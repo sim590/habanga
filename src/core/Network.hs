@@ -148,7 +148,7 @@ playMyTurn card ncdata@(NetworkStateChannelData nsTV _) = liftIO (readTVarIO nsT
   gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
   let
     packet          = HabangaPacket { _senderID = ns ^. myID
-                                    , _content  = PlayerTurn card (ns ^?! turnNumber + 1)
+                                    , _content  = PlayerTurn card (ns ^?! turnNumber)
                                     }
     playerTurnValue = InputValue { _valueData     = BS.toStrict $ serialise packet
                                  , _valueUserType = _PLAYER_TURN_UTYPE_

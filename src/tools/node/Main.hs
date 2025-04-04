@@ -111,9 +111,10 @@ executeCmd = do
     playTurn = case args of
       [n, strColor, slot] -> do
         let
-          changeNetState gs' = case mPlayerTurn of
-           Just pt -> gs' & status .~ Request pt
-           _       -> gs'
+          changeNetState ns = case mPlayerTurn of
+           Just pt -> ns & status     .~ Request pt
+                         & turnNumber +~ 1
+           _       -> ns
           mPlayerTurn = do
             c    <- readMaybe strColor
             n'   <- readMaybe n

@@ -222,15 +222,15 @@ widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> ga
     cardWidget c       = C.vCenter $ B.border $ vLimit 1 $ hLimit 2 $ C.center $ withAttr (colorAttrFromCard c False) $ str $ show $ c^.value
     centralCardWidget  = B.border . hLimit 15 . C.center . str
     cardsOnTableMatrix = [ [ cardWidget $ theCardsOnTable^.red._1
-                           , withAttr (attrName "redcard") $ centralCardWidget $ ps^.programResources.blueCard10x15
+                           , withAttr (attrName "redcard") $ centralCardWidget $ ps^.programResources.redCard10x15
                            , cardWidget $ theCardsOnTable^.red._2
                            ]
                          , [ cardWidget $ theCardsOnTable^.yellow._1
-                           , withAttr (attrName "yellowcard") $ centralCardWidget $ ps^.programResources.redCard10x15
+                           , withAttr (attrName "yellowcard") $ centralCardWidget $ ps^.programResources.yellowCard10x15
                            , cardWidget $ theCardsOnTable^.yellow._2
                            ]
                          , [ cardWidget $ theCardsOnTable^.blue._1
-                           , withAttr (attrName "bluecard") $ centralCardWidget $ ps^.programResources.yellowCard10x15
+                           , withAttr (attrName "bluecard") $ centralCardWidget $ ps^.programResources.blueCard10x15
                            , cardWidget $ theCardsOnTable^.blue._2
                            ]
                          , [ cardWidget $ theCardsOnTable^.purple._1

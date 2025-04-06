@@ -77,14 +77,27 @@ colorAttrFromCard c selected
 attrs :: [(AttrName, V.Attr)]
 attrs = [ ]
 
+thisPlayer :: NetworkState -> [PlayerState] -> PlayerState
+thisPlayer ns thePlayers = p
+  where
+    currentPlayer = head thePlayers
+    p             = case ns ^. NS.status of
+                      NS.Offline -> currentPlayer
+                      _          -> thePlayers !! OnlineGame.myCurrentPosInPlayerList ns
+
 goLeft :: NetworkState -> T.EventM AppFocus ProgramState ()
 goLeft ns = when (OnlineGame.isMyTurn ns) $ gameViewState.gameViewIndex %= max 0 . subtract 1
 
--- TODO: ajuster pour récupérer la borne en fonction de nos cartes et pas celles du premier dans la liste.
 goRight :: NetworkState -> T.EventM AppFocus ProgramState ()
-goRight ns = when (OnlineGame.isMyTurn ns) $ do
-  gs <- use gameState
-  gameViewState.gameViewIndex %= min ((+ (-1)) $ length $ head (gs^.players) ^. cardsInHand) . (+ 1)
+goRight ns = whenOurTurn go
+    where
+      whenOurTurn action = case ns ^. NS.status of
+                             NS.Offline -> action
+                             _          -> when (OnlineGame.isMyTurn ns) action
+      go = do
+        thePlayers <- use (gameState . players)
+        let p = thisPlayer ns thePlayers
+        gameViewState.gameViewIndex %= min ((+ (-1)) $ length $ p ^. cardsInHand) . (+ 1)
 
 goBackOrQuit :: T.EventM AppFocus ProgramState ()
 goBackOrQuit = do
@@ -204,10 +217,7 @@ widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> ga
     btn i c            = button (show $ c^.value) i 15 (ps^.gameViewState.gameViewIndex) (colorAttrFromCard c True)
     playerCardsButtons = zipWith (\ i c -> C.hCenter $ withAttr (colorAttrFromCard c False) $ btn i c) [0..]
     currentPlayer      = head players'
-    thisPlayer         = case ns ^. NS.status of
-                           NS.Offline -> currentPlayer
-                           _          -> players' !! OnlineGame.myCurrentPosInPlayerList ns
-    currentCardsInHand = thisPlayer ^. cardsInHand
+    currentCardsInHand = thisPlayer ns players' ^. cardsInHand
     theCardsOnTable    = ps^.gameState.cardsOnTable
     cardWidget c       = C.vCenter $ B.border $ vLimit 1 $ hLimit 2 $ C.center $ withAttr (colorAttrFromCard c False) $ str $ show $ c^.value
     centralCardWidget  = B.border . hLimit 15 . C.center . str

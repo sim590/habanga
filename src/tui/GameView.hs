@@ -132,7 +132,6 @@ playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> when (OnlineGame.isM
 
 event :: TVar NetworkState -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
 event nsTV (T.AppEvent (BNB.NetworkBrickUpdate ns)) = do
-  liftIO $ appendFile ("/tmp/toto"<> ns ^. NS.myID <>".txt") $ show ns
   let (turns, ns') = OnlineGame.consumeConsecutivePlayerTurns ns
   forM_ turns $ \ (_, card) -> playCard card
   networkState .= ns'

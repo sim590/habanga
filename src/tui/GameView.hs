@@ -142,6 +142,7 @@ event nsTV ev = do
   let
     quitOrNothing (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = goBackOrQuit
     quitOrNothing _                                        = return ()
+
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'z') [] )) = playMyTurn nsTV (Left ())
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'c') [] )) = playMyTurn nsTV (Right ())
     mainEvent (T.VtyEvent (V.EvKey V.KRight      [] )) = goRight ns
@@ -150,6 +151,7 @@ event nsTV ev = do
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'h') [] )) = goLeft ns
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = goBackOrQuit
     mainEvent _                                        = return ()
+
   Game.winner >>= \ case
     Just _ -> quitOrNothing ev
     _      -> mainEvent ev

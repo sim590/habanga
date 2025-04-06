@@ -182,7 +182,8 @@ gameOnGoingCb ncdata@(NetworkStateChannelData nsTV _) (StoredValue d _ _ _ utype
                             & status    .~ newNetworkStatusSafe networkStatus' ns
         gameTurns'     = Map.insert tn card (ns^.gameTurns)
         lastTurnNumber = fromIntegral $ fst $ last $ consecutivePlayerTurns ns gameTurns'
-        isOurTurn      = lastTurnNumber `mod` (ns ^?! gameSettings . numberOfPlayers) == ns ^?! myPlayerRank
+        n              = ns ^?! gameSettings . numberOfPlayers
+        isOurTurn      = lastTurnNumber `mod` n == (ns ^?! myPlayerRank - 1) `mod` n
         networkStatus'
           | isOurTurn = GameOnGoing AwaitingPlayerTurn
           | otherwise = ns ^. status
@@ -328,7 +329,7 @@ handleNetworkStatus (NetworkStateChannelData nsTV chan) ShuttingDown = do
 handleNetworkStatus ncdata@(NetworkStateChannelData nsTV _) nStatus = handleNS nStatus >> return True
   where
     clearPendingDhtOps = do
-      ns <- liftIO $ readTVarIO nsTV
+      ns     <- liftIO $ readTVarIO nsTV
       gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
       clearPermanentPutRequests gcHash
       clearListenRequests

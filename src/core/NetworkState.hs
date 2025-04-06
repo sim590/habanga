@@ -115,9 +115,10 @@ splitAtMissingTurn ns gameTurns' = (consecutivePlayerTurns', rest)
     consecutivePlayerTurns' = consecutivePlayerTurns ns gameTurns'
 
 consecutivePlayerTurns :: NetworkState -> Map Word16 (Either Card Card) -> [GameTurn]
-consecutivePlayerTurns ns gameTurns' = map fst $ takeWhile turnIsSubsequent $ zip (Map.toList gameTurns') [ns^.turnNumber..]
+consecutivePlayerTurns ns gameTurns' = map fst $ takeWhile turnIsSubsequent $ zip gameTurnsFromTurnNumber [ns^.turnNumber..]
   where
-    turnIsSubsequent ((t',_), t) = t' == t + 1
+    turnIsSubsequent ((t',_), t) = t' == t
+    gameTurnsFromTurnNumber      = dropWhile ((< ns ^. turnNumber) . fst) $ Map.toList gameTurns'
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

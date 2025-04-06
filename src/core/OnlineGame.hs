@@ -53,6 +53,16 @@ startGame nsTV = liftIO (readTVarIO nsTV) >>= \ ns -> do
   Network.requestNetwork nsTV $ GameStart myRank
   return gs
 
+myCurrentPosInPlayerList :: NetworkState -> Int
+myCurrentPosInPlayerList ns = (myRank + tn) `mod` n
+  where
+    myRank = ns ^. myPlayerRank
+    tn     = fromIntegral $ ns ^. turnNumber
+    n      = ns ^?! gameSettings . numberOfPlayers
+
+isMyTurn :: NetworkState -> Bool
+isMyTurn ns = myCurrentPosInPlayerList ns == 0
+
 consumeConsecutivePlayerTurns :: NetworkState -> ([GameTurn], NetworkState)
 consumeConsecutivePlayerTurns ns = (turnsToConsume, ns')
   where

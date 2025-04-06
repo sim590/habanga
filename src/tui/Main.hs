@@ -46,7 +46,7 @@ import qualified BrickNetworkBridge as BNB
 appEvent :: TVar NetworkState -> BrickEvent AppFocus BNB.NetworkBrickEvent -> EventM AppFocus ProgramState ()
 appEvent nsTV e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
   Just (MainMenu _) -> MainMenu.event nsTV e
-  Just (Game     _) -> GameView.event e
+  Just (Game     _) -> GameView.event nsTV e
   _                 -> return ()
 
 appChooseCursor :: ProgramState -> [CursorLocation AppFocus] -> Maybe (CursorLocation AppFocus)
@@ -88,7 +88,7 @@ app nsTV = M.App { M.appDraw         = drawUI
 
 main :: IO ()
 main = do
-  nsTV             <- liftIO (newTVarIO def)
+  nsTV      <- liftIO (newTVarIO def)
   brickchan <- liftIO $ newBChan 10
 
   let buildVty = mkVty VConfig.defaultConfig

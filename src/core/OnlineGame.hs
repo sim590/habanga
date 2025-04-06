@@ -54,7 +54,7 @@ startGame nsTV = liftIO (readTVarIO nsTV) >>= \ ns -> do
   return gs
 
 myCurrentPosInPlayerList :: NetworkState -> Int
-myCurrentPosInPlayerList ns = (myRank + tn) `mod` n
+myCurrentPosInPlayerList ns = (myRank - tn) `mod` n
   where
     myRank = ns ^. myPlayerRank
     tn     = fromIntegral $ ns ^. turnNumber

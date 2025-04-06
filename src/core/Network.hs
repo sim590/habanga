@@ -143,12 +143,12 @@ atomicallyHandleStateUpdate (NetworkStateChannelData nsTV chan) stateAction = at
   return a
 
 
-playMyTurn :: Either Card Card -> NetworkStateChannelData -> DhtRunnerM Dht ()
-playMyTurn card ncdata@(NetworkStateChannelData nsTV _) = liftIO (readTVarIO nsTV) >>= \ ns -> do
+playMyTurn :: Word16 -> Either Card Card -> NetworkStateChannelData -> DhtRunnerM Dht ()
+playMyTurn tn card ncdata@(NetworkStateChannelData nsTV _) = liftIO (readTVarIO nsTV) >>= \ ns -> do
   gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
   let
     packet          = HabangaPacket { _senderID = ns ^. myID
-                                    , _content  = PlayerTurn card (ns ^?! turnNumber)
+                                    , _content  = PlayerTurn card tn
                                     }
     playerTurnValue = InputValue { _valueData     = BS.toStrict $ serialise packet
                                  , _valueUserType = _PLAYER_TURN_UTYPE_
@@ -360,7 +360,7 @@ handleNetworkStatus ncdata@(NetworkStateChannelData nsTV _) nStatus = handleNS n
         & myPlayerRank  .~ myRank
         & turnNumber    .~ 0
       void $ DhtRunner.listen gcHash (gameOnGoingCb ncdata) shutdownCb
-    handleNS (Request (PlayTurn card)) = playMyTurn card ncdata
+    handleNS (Request (PlayTurn tn card)) = playMyTurn tn card ncdata
     handleNS (Request ResetNetwork) = do
       clearPendingDhtOps
       liftIO $ atomicallyHandleStateUpdate ncdata $ modifyTVar nsTV $ \ ns -> def

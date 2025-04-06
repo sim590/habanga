@@ -110,6 +110,7 @@ executeCmd = do
       liftIO $ atomically $ modifyTVar nsTV $ status .~ Request (GameStart myRank)
     playTurn = case args of
       [n, strColor, slot] -> do
+        netState <- liftIO $ readTVarIO nsTV
         let
           changeNetState ns = case mPlayerTurn of
            Just pt -> ns & status     .~ Request pt
@@ -123,9 +124,9 @@ executeCmd = do
                 | slot `elem` [ "l", "left"  ] = Just $ Left  (Card n' (Just c))
                 | slot `elem` [ "r", "right" ] = Just $ Right (Card n' (Just c))
                 | otherwise                    = Nothing
-            PlayTurn <$> mCard
+            PlayTurn (netState ^. turnNumber) <$> mCard
         case mPlayerTurn of
-          Just (PlayTurn ec) -> do
+          Just (PlayTurn _ ec) -> do
             (mNumberOfCardsDrawn, gs') <- flip runStateT gs $ runMaybeT $ processPlayerTurnAction ec
             case mNumberOfCardsDrawn of
               Just nCardsToDraw  -> do

@@ -25,7 +25,6 @@ import Control.Lens
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Concurrent.STM
-import Control.Concurrent
 
 import Brick.Util
 import Brick.AttrMap

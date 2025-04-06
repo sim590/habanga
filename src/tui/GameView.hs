@@ -77,12 +77,12 @@ colorAttrFromCard c selected
 attrs :: [(AttrName, V.Attr)]
 attrs = [ ]
 
-goLeft :: T.EventM AppFocus ProgramState ()
-goLeft = gameViewState.gameViewIndex %= max 0 . subtract 1
+goLeft :: NetworkState -> T.EventM AppFocus ProgramState ()
+goLeft ns = when (OnlineGame.isMyTurn ns) $ gameViewState.gameViewIndex %= max 0 . subtract 1
 
 -- TODO: ajuster pour récupérer la borne en fonction de nos cartes et pas celles du premier dans la liste.
-goRight :: T.EventM AppFocus ProgramState ()
-goRight = do
+goRight :: NetworkState -> T.EventM AppFocus ProgramState ()
+goRight ns = when (OnlineGame.isMyTurn ns) $ do
   gs <- use gameState
   gameViewState.gameViewIndex %= min ((+ (-1)) $ length $ head (gs^.players) ^. cardsInHand) . (+ 1)
 
@@ -138,15 +138,16 @@ event nsTV (T.AppEvent (BNB.NetworkBrickUpdate ns)) = do
   networkState .= ns'
   liftIO $ atomically $ modifyTVar nsTV $ NS.turnNumber .~ ns' ^. NS.turnNumber
 event nsTV ev = do
+  ns <- liftIO $ readTVarIO nsTV
   let
     quitOrNothing (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = goBackOrQuit
     quitOrNothing _                                        = return ()
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'z') [] )) = playMyTurn nsTV (Left ())
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'c') [] )) = playMyTurn nsTV (Right ())
-    mainEvent (T.VtyEvent (V.EvKey V.KRight      [] )) = goRight
-    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'l') [] )) = goRight
-    mainEvent (T.VtyEvent (V.EvKey V.KLeft       [] )) = goLeft
-    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'h') [] )) = goLeft
+    mainEvent (T.VtyEvent (V.EvKey V.KRight      [] )) = goRight ns
+    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'l') [] )) = goRight ns
+    mainEvent (T.VtyEvent (V.EvKey V.KLeft       [] )) = goLeft ns
+    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'h') [] )) = goLeft ns
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = goBackOrQuit
     mainEvent _                                        = return ()
   Game.winner >>= \ case
@@ -157,17 +158,25 @@ winnerDialog :: ProgramState -> [Widget AppFocus]
 winnerDialog ps =
   let
     msg w = fill ' ' <+> str (w <> " a gagné!") <+> fill ' '
-    dimensions = hLimit 40 . vLimit 5
    in case ps^.gameViewState.winner of
         Just winnerName -> [ C.centerLayer $ B.borderWithLabel (str "Fin de partie!")
-                                           $ dimensions
+                                           $ popUpWidgetDimensions
                                            $ vBox [ fill ' ', msg winnerName, fill ' ' ]
                            ]
         _               -> []
 
+otherPlayerTurnWidget :: ProgramState -> [Widget AppFocus]
+otherPlayerTurnWidget ps
+  | not (OnlineGame.isMyTurn ns) = [ C.centerLayer $ B.borderWithLabel popUpTitle $ popUpWidgetDimensions $ vBox [ fill ' ', msg, fill ' ' ] ]
+  | otherwise                    = []
+    where
+      ns            = ps ^. networkState
+      popUpTitle    = str $ "Tour de " <> currentPlayer ^. name
+      msg           = C.center $ str "Veuillez patientez..."
+      currentPlayer = head $ ps ^. gameState . players
 
 widget :: ProgramState -> [Widget AppFocus]
-widget ps = winnerDialog ps <> [gameLogWidget] <> gameUI
+widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> gameUI
   where
     ns                 = ps ^. networkState
     players'           = ps ^. gameState . players

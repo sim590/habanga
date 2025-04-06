@@ -182,8 +182,8 @@ gameOnGoingCb ncdata@(NetworkStateChannelData nsTV _) (StoredValue d _ _ _ utype
                             & status    .~ newNetworkStatusSafe networkStatus' ns
         gameTurns'     = Map.insert tn card (ns^.gameTurns)
         lastTurnNumber = fromIntegral $ fst $ last $ consecutivePlayerTurns ns gameTurns'
-        n              = ns ^?! gameSettings . numberOfPlayers
-        isOurTurn      = lastTurnNumber `mod` n == (ns ^?! myPlayerRank - 1) `mod` n
+        n              = ns ^. gameSettings . numberOfPlayers
+        isOurTurn      = lastTurnNumber `mod` n == (ns ^. myPlayerRank - 1) `mod` n
         networkStatus'
           | isOurTurn = GameOnGoing AwaitingPlayerTurn
           | otherwise = ns ^. status

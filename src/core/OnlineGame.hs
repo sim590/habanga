@@ -58,7 +58,7 @@ myCurrentPosInPlayerList ns = (myRank + tn) `mod` n
   where
     myRank = ns ^. myPlayerRank
     tn     = fromIntegral $ ns ^. turnNumber
-    n      = ns ^?! gameSettings . numberOfPlayers
+    n      = ns ^. gameSettings . numberOfPlayers
 
 isMyTurn :: NetworkState -> Bool
 isMyTurn ns = myCurrentPosInPlayerList ns == 0

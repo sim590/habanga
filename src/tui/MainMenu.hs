@@ -165,8 +165,7 @@ event nsTV ev = do
             validFields          = validName && validNumberOfPlayers
           mainMenuState . submenu . _Just . gameForm %= setFieldValid validNumberOfPlayers numberOfPlayersField
           when validFields $ do
-            withNetwork nsTV $ resetNetwork nsTV >> OnlineGame.createGame nsTV playerName numberOfPlayers'
-
+            withNetwork nsTV $ OnlineGame.createGame nsTV playerName numberOfPlayers'
             mainMenuState . submenu .= Just (OnlineLobby Host)
         OtherPlayer -> do
           let
@@ -176,15 +175,15 @@ event nsTV ev = do
             gameCodeField = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormGameCodeField)
           mainMenuState . submenu . _Just . gameForm %= setFieldValid validCode gameCodeField
           when validFields $ do
-            withNetwork nsTV $ resetNetwork nsTV >> OnlineGame.joinGame nsTV playerName gc
+            withNetwork nsTV $ OnlineGame.joinGame nsTV playerName gc
             mainMenuState . submenu .= Just (OnlineLobby OtherPlayer)
 
     formEvents (OnlineGameInitialization f _) _ = nestEventM' f (handleFormEvent ev) >>= (mainMenuState . submenu . _Just . onlineGameForm .=)
 
     formEvents _ _ = error "MainMenu.event.formEvents: sous-menu invalide!"
 
-    onlineLobbyEvents (T.VtyEvent (V.EvKey V.KEsc []))        = goBackOrQuit
-    onlineLobbyEvents (T.VtyEvent (V.EvKey (V.KChar 'q') [])) = goBackOrQuit
+    onlineLobbyEvents (T.VtyEvent (V.EvKey V.KEsc []))        = resetNetwork nsTV >> goBackOrQuit
+    onlineLobbyEvents (T.VtyEvent (V.EvKey (V.KChar 'q') [])) = resetNetwork nsTV >> goBackOrQuit
     onlineLobbyEvents _                                       = return ()
 
   use (mainMenuState.submenu) >>= \ case

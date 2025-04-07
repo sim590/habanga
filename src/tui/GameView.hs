@@ -90,9 +90,9 @@ goLeft ns = whenIsLocalPlayerTurn ns $ gameViewState.gameViewIndex %= max 0 . su
 
 goRight :: NetworkState -> T.EventM AppFocus ProgramState ()
 goRight ns = whenIsLocalPlayerTurn ns $ do
-        thePlayers <- use (gameState . players)
+  thePlayers <- use (gameState . players)
   let p = localPlayer ns thePlayers
-        gameViewState.gameViewIndex %= min ((+ (-1)) $ length $ p ^. cardsInHand) . (+ 1)
+  gameViewState.gameViewIndex %= min ((+ (-1)) $ length $ p ^. cardsInHand) . (+ 1)
 
 goBackOrQuit :: T.EventM AppFocus ProgramState ()
 goBackOrQuit = do
@@ -122,15 +122,15 @@ playCard sidedCard = do
   gameViewState . winner .= ((^.name) <$> theWinner)
 
 playMyTurn :: TVar NetworkState -> Either () () -> T.EventM AppFocus ProgramState ()
-playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> when (OnlineGame.isMyTurn ns) $ do
+playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> whenIsLocalPlayerTurn ns $ do
   thePlayers <- use (gameState . players)
-  let currentPlayer = head thePlayers
   cardIdx <- use (gameViewState . gameViewIndex)
   let
-    card = (currentPlayer^.cardsInHand) !! cardIdx
-    ec   = case side of
-             Left {}  -> Left card
-             Right {} -> Right card
+    currentPlayer = head thePlayers
+    card          = (currentPlayer^.cardsInHand) !! cardIdx
+    ec            = case side of
+                      Left {}  -> Left card
+                      Right {} -> Right card
 
   playCard ec
 

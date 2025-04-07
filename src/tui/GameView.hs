@@ -184,8 +184,9 @@ winnerDialog ps =
                            ]
         _               -> []
 
-otherPlayerTurnWidget :: ProgramState -> [Widget AppFocus]
-otherPlayerTurnWidget ps
+otherPlayerTurnWidget :: ProgramState -> NS.NetworkStatus -> [Widget AppFocus]
+otherPlayerTurnWidget _ NS.Offline = []
+otherPlayerTurnWidget ps _
   | not (OnlineGame.isMyTurn ns) = [ C.centerLayer $ B.borderWithLabel popUpTitle $ popUpWidgetDimensions $ vBox [ fill ' ', msg, fill ' ' ] ]
   | otherwise                    = []
     where
@@ -195,7 +196,7 @@ otherPlayerTurnWidget ps
       currentPlayer = head $ ps ^. gameState . players
 
 widget :: ProgramState -> [Widget AppFocus]
-widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> gameUI
+widget ps = winnerDialog ps <> otherPlayerTurnWidget ps (ns ^. NS.status) <> [gameLogWidget] <> gameUI
   where
     ns                 = ps ^. networkState
     players'           = ps ^. gameState . players
@@ -223,7 +224,7 @@ widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> ga
     playerCardsButtons = zipWith (\ i c -> C.hCenter $ withAttr (colorAttrFromCard c False) $ btn i c) [0..]
     currentPlayer      = head players'
     currentCardsInHand = thisPlayer ns players' ^. cardsInHand
-    theCardsOnTable    = ps^.gameState.cardsOnTable
+    theCardsOnTable    = ps ^. gameState . cardsOnTable
     cardWidget c       = C.vCenter $ B.border $ vLimit 1 $ hLimit 2 $ C.center $ withAttr (colorAttrFromCard c False) $ str $ show $ c^.value
     centralCardWidget  = B.border . hLimit 15 . C.center . str
     cardsOnTableMatrix = [ [ cardWidget $ theCardsOnTable^.red._1

@@ -79,7 +79,7 @@ attrs = [ ]
 
 localPlayer :: NetworkState -> [PlayerState] -> PlayerState
 localPlayer NS.NetworkState{NS._status = NS.Offline} thePlayers = head thePlayers
-localPlayer ns thePlayers              = thePlayers !! OnlineGame.myCurrentPosInPlayerList ns
+localPlayer ns thePlayers                                       = thePlayers !! OnlineGame.myCurrentPosInPlayerList ns
 
 whenIsLocalPlayerTurn :: Applicative f => NetworkState -> f () -> f ()
 whenIsLocalPlayerTurn NS.NetworkState{NS._status = NS.Offline} = id

@@ -136,7 +136,12 @@ playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> when (OnlineGame.isM
     ec   = case side of
              Left {}  -> Left card
              Right {} -> Right card
+
   playCard ec
+
+  resultingHand <- use (gameState . players . _last . cardsInHand)
+  gameViewState . gameViewIndex %= min (length resultingHand - 1)
+
   case ns ^. NS.status of
     NS.Offline -> return ()
     _          -> liftIO $ atomically $ modifyTVar nsTV $ \ ns' -> ns' & NS.status     .~ NS.Request (NS.PlayTurn (ns' ^. NS.turnNumber) ec)

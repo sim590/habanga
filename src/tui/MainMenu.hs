@@ -10,6 +10,7 @@
 
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module MainMenu ( event
                 , attrs
@@ -89,8 +90,10 @@ selectEntry menuButtons menuIndexLens = do
   let maction = mi >>= \ i -> over traverse snd menuButtons ^? ix i
   fromMaybe (return ()) maction
 
-resetNetwork :: MonadIO m =>  TVar NetworkState -> m ()
-resetNetwork nsTV = Network.requestNetwork nsTV NS.ResetNetwork
+resetNetwork :: (MonadIO m, MonadState ProgramState m) =>  TVar NetworkState -> m ()
+resetNetwork nsTV = do
+  networkState .= def
+  Network.requestNetwork nsTV NS.ResetNetwork
 
 goBackOrQuit :: T.EventM AppFocus ProgramState ()
 goBackOrQuit = use (mainMenuState.submenu) >>= \ case

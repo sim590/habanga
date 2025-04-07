@@ -77,26 +77,21 @@ colorAttrFromCard c selected
 attrs :: [(AttrName, V.Attr)]
 attrs = [ ]
 
-thisPlayer :: NetworkState -> [PlayerState] -> PlayerState
-thisPlayer ns thePlayers = p
-  where
-    currentPlayer = head thePlayers
-    p             = case ns ^. NS.status of
-                      NS.Offline -> currentPlayer
-                      _          -> thePlayers !! OnlineGame.myCurrentPosInPlayerList ns
+localPlayer :: NetworkState -> [PlayerState] -> PlayerState
+localPlayer NS.NetworkState{NS._status = NS.Offline} thePlayers = head thePlayers
+localPlayer ns thePlayers              = thePlayers !! OnlineGame.myCurrentPosInPlayerList ns
+
+whenIsLocalPlayerTurn :: Applicative f => NetworkState -> f () -> f ()
+whenIsLocalPlayerTurn NS.NetworkState{NS._status = NS.Offline} = id
+whenIsLocalPlayerTurn ns                                       = when (OnlineGame.isMyTurn ns)
 
 goLeft :: NetworkState -> T.EventM AppFocus ProgramState ()
-goLeft ns = when (OnlineGame.isMyTurn ns) $ gameViewState.gameViewIndex %= max 0 . subtract 1
+goLeft ns = whenIsLocalPlayerTurn ns $ gameViewState.gameViewIndex %= max 0 . subtract 1
 
 goRight :: NetworkState -> T.EventM AppFocus ProgramState ()
-goRight ns = whenOurTurn go
-    where
-      whenOurTurn action = case ns ^. NS.status of
-                             NS.Offline -> action
-                             _          -> when (OnlineGame.isMyTurn ns) action
-      go = do
+goRight ns = whenIsLocalPlayerTurn ns $ do
         thePlayers <- use (gameState . players)
-        let p = thisPlayer ns thePlayers
+  let p = localPlayer ns thePlayers
         gameViewState.gameViewIndex %= min ((+ (-1)) $ length $ p ^. cardsInHand) . (+ 1)
 
 goBackOrQuit :: T.EventM AppFocus ProgramState ()
@@ -184,9 +179,9 @@ winnerDialog ps =
                            ]
         _               -> []
 
-otherPlayerTurnWidget :: ProgramState -> NS.NetworkStatus -> [Widget AppFocus]
-otherPlayerTurnWidget _ NS.Offline = []
-otherPlayerTurnWidget ps _
+otherPlayerTurnWidget :: ProgramState -> [Widget AppFocus]
+otherPlayerTurnWidget ProgramState { _networkState = NS.NetworkState { NS._status = NS.Offline } } = []
+otherPlayerTurnWidget ps
   | not (OnlineGame.isMyTurn ns) = [ C.centerLayer $ B.borderWithLabel popUpTitle $ popUpWidgetDimensions $ vBox [ fill ' ', msg, fill ' ' ] ]
   | otherwise                    = []
     where
@@ -196,7 +191,7 @@ otherPlayerTurnWidget ps _
       currentPlayer = head $ ps ^. gameState . players
 
 widget :: ProgramState -> [Widget AppFocus]
-widget ps = winnerDialog ps <> otherPlayerTurnWidget ps (ns ^. NS.status) <> [gameLogWidget] <> gameUI
+widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> gameUI
   where
     ns                 = ps ^. networkState
     players'           = ps ^. gameState . players
@@ -223,7 +218,7 @@ widget ps = winnerDialog ps <> otherPlayerTurnWidget ps (ns ^. NS.status) <> [ga
     btn i c            = button (show $ c^.value) i 15 (ps^.gameViewState.gameViewIndex) (colorAttrFromCard c True)
     playerCardsButtons = zipWith (\ i c -> C.hCenter $ withAttr (colorAttrFromCard c False) $ btn i c) [0..]
     currentPlayer      = head players'
-    currentCardsInHand = thisPlayer ns players' ^. cardsInHand
+    currentCardsInHand = localPlayer ns players' ^. cardsInHand
     theCardsOnTable    = ps ^. gameState . cardsOnTable
     cardWidget c       = C.vCenter $ B.border $ vLimit 1 $ hLimit 2 $ C.center $ withAttr (colorAttrFromCard c False) $ str $ show $ c^.value
     centralCardWidget  = B.border . hLimit 15 . C.center . str

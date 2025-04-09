@@ -112,11 +112,7 @@ executeCmd = do
       liftIO $ atomically $ writeTChan reqChan $ GameStart myRank
     playTurn = case args of
       [n, strColor, slot] -> do
-        netState <- liftIO $ readTVarIO nsTV
         let
-          changeNetState ns = case mPlayerTurn of
-           Just pt -> ns & turnNumber +~ 1
-           _       -> ns
           mPlayerTurn = do
             c    <- readMaybe strColor
             n'   <- readMaybe n
@@ -125,16 +121,15 @@ executeCmd = do
                 | slot `elem` [ "l", "left"  ] = Just $ Left  (Card n' (Just c))
                 | slot `elem` [ "r", "right" ] = Just $ Right (Card n' (Just c))
                 | otherwise                    = Nothing
-            PlayTurn (netState ^. turnNumber) <$> mCard
+            PlayTurn <$> mCard
         case mPlayerTurn of
-          Just pt@(PlayTurn _ ec) -> do
+          Just pt@(PlayTurn ec) -> do
             (mNumberOfCardsDrawn, gs') <- flip runStateT gs $ runMaybeT $ processPlayerTurnAction ec
             case mNumberOfCardsDrawn of
               Just nCardsToDraw  -> do
                 when (nCardsToDraw > 0) $
                   logText %= (<> ["Vous pigez " <> show nCardsToDraw <> " carte(s)!"])
                 gameState .= gs'
-                liftIO $ atomically $ modifyTVar nsTV changeNetState
                 liftIO $ atomically $ writeTChan reqChan pt
               Nothing -> logText %= (<>["err.. Impossible de jouer cette carte!"])
           _ -> logInvalidParameter

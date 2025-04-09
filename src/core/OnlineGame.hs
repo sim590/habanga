@@ -7,6 +7,7 @@ import qualified Data.Map as Map
 
 import Numeric
 
+import Control.Monad
 import Control.Monad.IO.Class
 import Control.Concurrent.STM
 import Control.Lens
@@ -17,6 +18,7 @@ import OpenDHT.Types
 import OpenDHT.InfoHash
 
 import Game
+import Cards
 import GameState
 import NetworkState
 import Random
@@ -66,11 +68,17 @@ myCurrentPosInPlayerList ns = (myRank - tn) `mod` n
 isMyTurn :: NetworkState -> Bool
 isMyTurn ns = myCurrentPosInPlayerList ns == 0
 
-consumeConsecutivePlayerTurns :: NetworkState -> ([GameTurn], NetworkState)
-consumeConsecutivePlayerTurns ns = (turnsToConsume, ns')
-  where
+consumeConsecutivePlayerTurns :: MonadIO m => NetworkState -> TChan NetworkRequest -> m [GameTurn]
+consumeConsecutivePlayerTurns ns reqChan = do
+  let
     turnsToConsume = consecutivePlayerTurns ns (ns ^. gameTurns)
-    ns'            = ns & turnNumber +~ fromIntegral (length turnsToConsume)
+    n              = length turnsToConsume
+    tn'            = ns ^. turnNumber + fromIntegral n
+  when (n > 0) $ liftIO $ atomically $ writeTChan reqChan $ UpdateTurnNumber tn'
+  return turnsToConsume
+
+playMyTurn :: MonadIO m => Either Card Card -> TChan NetworkRequest -> m ()
+playMyTurn card reqChan = liftIO $ atomically $ writeTChan reqChan $ PlayTurn card
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

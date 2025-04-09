@@ -139,18 +139,14 @@ playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> whenIsLocalPlayerTur
 
   case ns ^. NS.status of
     NS.Offline -> return ()
-    _          -> do
-      reqChan <- use networkRequestChannel
-      liftIO $ atomically $ writeTChan (reqChan ^?! _Just) $ NS.PlayTurn (ns ^. NS.turnNumber) ec
-      liftIO $ atomically $ modifyTVar nsTV $ NS.turnNumber +~ 1
-
+    _          -> use networkRequestChannel >>= \ mReqChan -> OnlineGame.playMyTurn ec (mReqChan ^?! _Just)
 
 event :: TVar NetworkState -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
-event nsTV (T.AppEvent (BNB.NetworkBrickUpdate ns)) = do
-  let (turns, ns') = OnlineGame.consumeConsecutivePlayerTurns ns
+event _ (T.AppEvent (BNB.NetworkBrickUpdate ns)) = do
+  reqChan <- use networkRequestChannel
+  turns <- OnlineGame.consumeConsecutivePlayerTurns ns (reqChan ^?! _Just)
   forM_ turns $ \ (_, card) -> playCard card
-  networkState .= ns'
-  liftIO $ atomically $ modifyTVar nsTV $ NS.turnNumber .~ ns' ^. NS.turnNumber
+  networkState .= ns
 event nsTV ev = do
   ns <- liftIO $ readTVarIO nsTV
   let

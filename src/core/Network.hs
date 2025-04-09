@@ -357,7 +357,11 @@ handleRequest ncdata@(NetworkStateChannelData nsTV reqChan _) = liftIO (atomical
         & myPlayerRank  .~ myRank
         & turnNumber    .~ 0
       void $ DhtRunner.listen gcHash (gameOnGoingCb ncdata) shutdownCb
-    handleReq (PlayTurn tn card) = playMyTurn tn card ncdata
+    handleReq (PlayTurn card) = do
+      ns <- liftIO $ readTVarIO nsTV
+      liftIO $ atomically $ modifyTVar nsTV $ turnNumber +~ 1
+      playMyTurn (ns ^. turnNumber) card ncdata
+    handleReq (UpdateTurnNumber tn) = liftIO $ atomicallyHandleStateUpdate ncdata $ modifyTVar nsTV $ turnNumber .~ tn
     handleReq ResetNetwork = do
       ns <- liftIO $ readTVarIO nsTV
       clearPendingDhtOps ns

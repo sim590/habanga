@@ -28,7 +28,8 @@ data OnlineGameStatus = AwaitingPlayerTurn
 data NetworkRequest = GameAnnounce OnlineGameSettings String
                     | JoinGame GameCode String
                     | GameStart Int
-                    | PlayTurn Word16 (Either Card Card)
+                    | PlayTurn (Either Card Card)
+                    | UpdateTurnNumber Word16
                     | ResetNetwork
                     deriving Show
 data NetworkEvent = Connection

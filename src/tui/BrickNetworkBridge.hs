@@ -27,7 +27,6 @@ updateNetworkState netChan brickChan = atomically (readTChan netChan) >>= \ (Net
    ShuttingDown -> return False
    _            -> writeBChan brickChan (NetworkBrickUpdate ns) >> return True
 
-
 loop :: TChan NetworkChannelUpdate
      -> Brick.BChan.BChan NetworkBrickEvent
      -> IO ()

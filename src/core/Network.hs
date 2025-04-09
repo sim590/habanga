@@ -16,10 +16,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Network ( loop
                , forkFinallyWithMvar
-               , requestNetwork
                ) where
 
 import GHC.Generics
@@ -110,9 +110,6 @@ _GAME_SETUP_UTYPE_ = show $ toConstr $ GameSetup mempty
 _PLAYER_TURN_UTYPE_ :: String
 _PLAYER_TURN_UTYPE_ = show $ toConstr $ PlayerTurn (Left def) 0
 
-requestNetwork :: MonadIO m => TVar NetworkState -> NetworkRequest -> m ()
-requestNetwork nsTV r = liftIO $ atomically $ modifyTVar nsTV $ status .~ Request r
-
 -- TODO:
 shutdownCb :: ShutdownCallback
 shutdownCb = return ()
@@ -129,6 +126,12 @@ clearListenRequests = do
     forM_ tokens $ \ t ->
       runMaybeT (DhtRunner.cancelListen h t)
 
+clearPendingDhtOps :: NetworkState -> DhtRunnerM Dht ()
+clearPendingDhtOps ns = do
+  gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
+  clearPermanentPutRequests gcHash
+  clearListenRequests
+
 newNetworkStatusSafe :: NetworkStatus -> NetworkState -> NetworkStatus
 newNetworkStatusSafe nStatus ns = let currentNetworkStatus = ns ^. status in case currentNetworkStatus of
   NetworkFailure {} -> currentNetworkStatus
@@ -136,15 +139,15 @@ newNetworkStatusSafe nStatus ns = let currentNetworkStatus = ns ^. status in cas
   _                 -> nStatus
 
 atomicallyHandleStateUpdate :: NetworkStateChannelData -> STM a -> IO a
-atomicallyHandleStateUpdate (NetworkStateChannelData nsTV chan) stateAction = atomically $ do
+atomicallyHandleStateUpdate (NetworkStateChannelData nsTV _ updateChan) stateAction = atomically $ do
   a  <- stateAction
   ns <- readTVar nsTV
-  writeTChan chan (NetworkChannelUpdate ns)
+  writeTChan updateChan (NetworkChannelUpdate ns)
   return a
 
 
 playMyTurn :: Word16 -> Either Card Card -> NetworkStateChannelData -> DhtRunnerM Dht ()
-playMyTurn tn card ncdata@(NetworkStateChannelData nsTV _) = liftIO (readTVarIO nsTV) >>= \ ns -> do
+playMyTurn tn card ncdata@(NetworkStateChannelData nsTV _ _) = liftIO (readTVarIO nsTV) >>= \ ns -> do
   gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
   let
     packet          = HabangaPacket { _senderID = ns ^. myID
@@ -165,7 +168,7 @@ gameOnGoingCb :: NetworkStateChannelData -> ValueCallback
 gameOnGoingCb _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
 gameOnGoingCb _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
 gameOnGoingCb _    (StoredValue {})            True = return True
-gameOnGoingCb ncdata@(NetworkStateChannelData nsTV _) (StoredValue d _ _ _ utype) False
+gameOnGoingCb ncdata@(NetworkStateChannelData nsTV _ _) (StoredValue d _ _ _ utype) False
   | utype == _PLAYER_TURN_UTYPE_ = deserialiseAndTreatPacket
   | otherwise                    = return True
   where
@@ -190,7 +193,7 @@ gameOnGoingCb ncdata@(NetworkStateChannelData nsTV _) (StoredValue d _ _ _ utype
     treatPacket _ ns = (True, ns)
 
 shareGameSetup :: NetworkStateChannelData -> DhtRunnerM Dht ()
-shareGameSetup ncdata@(NetworkStateChannelData nsTV _) = liftIO (readTVarIO nsTV) >>= \ ns -> do
+shareGameSetup ncdata@(NetworkStateChannelData nsTV _ _) = liftIO (readTVarIO nsTV) >>= \ ns -> do
   gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
   let
     packet               = HabangaPacket { _senderID = ns ^. myID
@@ -211,7 +214,7 @@ gameJoinRequestCb :: String -> NetworkStateChannelData -> ValueCallback
 gameJoinRequestCb _    _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
 gameJoinRequestCb _    _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
 gameJoinRequestCb _    _    (StoredValue {})            True = return True
-gameJoinRequestCb myId ncdata@(NetworkStateChannelData nsTV _) (StoredValue d _ _ _ utype) False
+gameJoinRequestCb myId ncdata@(NetworkStateChannelData nsTV _ _) (StoredValue d _ _ _ utype) False
   | utype == _GAME_JOIN_REQUEST_ACCEPTED_UTYPE_ = deserialiseAndTreatPacket
   | utype == _GAME_SETUP_UTYPE_                 = deserialiseAndTreatPacket
   | otherwise                                   = return True
@@ -249,7 +252,7 @@ gameJoinRequestCb myId ncdata@(NetworkStateChannelData nsTV _) (StoredValue d _ 
 
 
 requestToJoinGame :: GameCode -> String -> NetworkStateChannelData -> DhtRunnerM Dht ()
-requestToJoinGame gc playerName ncdata@(NetworkStateChannelData nsTV _) = liftIO (readTVarIO nsTV) >>= \ initialGameState -> do
+requestToJoinGame gc playerName ncdata@(NetworkStateChannelData nsTV _ _) = liftIO (readTVarIO nsTV) >>= \ initialGameState -> do
   gcHash <- liftIO $ unDht $ infoHashFromString gc
   let
     packet               = HabangaPacket { _senderID = initialGameState ^. myID
@@ -271,7 +274,7 @@ gameAnnounceCb :: Int -> NetworkStateChannelData -> ValueCallback
 gameAnnounceCb _                  _    (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
 gameAnnounceCb _                  _    (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
 gameAnnounceCb _                  _    (StoredValue {})            True = return True
-gameAnnounceCb maxNumberOfPlayers ncdata@(NetworkStateChannelData nsTV _) (StoredValue d _ _ _ utype) False
+gameAnnounceCb maxNumberOfPlayers ncdata@(NetworkStateChannelData nsTV _ _) (StoredValue d _ _ _ utype) False
   | utype == _GAME_JOIN_REQUEST_UTYPE_ = deserialiseAndTreatPacket
   | otherwise                          = return True
   where
@@ -298,7 +301,7 @@ gameAnnounceCb maxNumberOfPlayers ncdata@(NetworkStateChannelData nsTV _) (Store
                                                                  else (False, ns)
 
 announceGame :: OnlineGameSettings -> NetworkStateChannelData -> DhtRunnerM Dht OpToken
-announceGame (OnlineGameSettings gc maxNumberOfPlayers) ncdata@(NetworkStateChannelData nsTV _) = liftIO (readTVarIO nsTV) >>= \ initialGameState -> do
+announceGame (OnlineGameSettings gc maxNumberOfPlayers) ncdata@(NetworkStateChannelData nsTV _ _) = liftIO (readTVarIO nsTV) >>= \ initialGameState -> do
   gcHash <- liftIO $ unDht $ infoHashFromString gc
   let
     packet            = HabangaPacket { _senderID   = initialGameState ^. myID
@@ -322,34 +325,27 @@ initializeDHT dhtRconf = do
   when (all isSpace $ dhtRconf^.proxyServer) $
     DhtRunner.bootstrap _DEFAULT_BOOTSTRAP_ADDR_ _DEFAULT_BOOTSTRAP_PORT_
 
-handleNetworkStatus :: NetworkStateChannelData -> NetworkStatus -> DhtRunnerM Dht Bool
-handleNetworkStatus (NetworkStateChannelData nsTV chan) ShuttingDown = do
-  liftIO $ readTVarIO nsTV >>= atomically . writeTChan chan . NetworkChannelUpdate
-  return False
-handleNetworkStatus ncdata@(NetworkStateChannelData nsTV _) nStatus = handleNS nStatus >> return True
+handleRequest :: NetworkStateChannelData -> DhtRunnerM Dht Bool
+handleRequest ncdata@(NetworkStateChannelData nsTV reqChan _) = liftIO (atomically $ tryReadTChan reqChan) >>= \ case
+  Nothing  -> return True
+  Just req -> do
+              liftIO (atomically $ modifyTVar nsTV $ \ ns -> ns & status .~ newNetworkStatusSafe TreatingRequest ns)
+              handleReq req
+              return True
   where
-    clearPendingDhtOps = do
-      ns     <- liftIO $ readTVarIO nsTV
-      gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
-      clearPermanentPutRequests gcHash
-      clearListenRequests
-    handleNS (Request (JoinGame gc myname)) = do
+    handleReq (JoinGame gc myname) = do
       liftIO $ atomicallyHandleStateUpdate ncdata $ modifyTVar nsTV $ \ ns' -> ns'
         & gameSettings.gameCode .~ gc
         & myName                .~ myname
       requestToJoinGame gc myname ncdata
-    handleNS (Request (GameAnnounce theGameSettings myname)) = do
+    handleReq (GameAnnounce theGameSettings myname) = do
       liftIO $ atomicallyHandleStateUpdate ncdata $ modifyTVar nsTV $ \ ns' -> ns'
         & gameSettings      .~ theGameSettings
         & gameHostID        .~ ns' ^. myID
         & myName            .~ myname
         & playersIdentities .~ Map.fromList [(ns'^.myID, myname)]
       void $ announceGame theGameSettings ncdata
-    handleNS SharingGameSetup = shareGameSetup ncdata
-    handleNS SetupPhaseDone = do
-      clearPendingDhtOps
-      liftIO $ atomicallyHandleStateUpdate ncdata $ modifyTVar nsTV $ \ ns -> ns & status .~ newNetworkStatusSafe GameReadyForInitialization ns
-    handleNS (Request (GameStart myRank)) = do
+    handleReq (GameStart myRank) = do
       ns     <- liftIO $ readTVarIO nsTV
       gcHash <- liftIO $ unDht $ infoHashFromString $ ns ^. gameSettings . gameCode
       let
@@ -361,13 +357,26 @@ handleNetworkStatus ncdata@(NetworkStateChannelData nsTV _) nStatus = handleNS n
         & myPlayerRank  .~ myRank
         & turnNumber    .~ 0
       void $ DhtRunner.listen gcHash (gameOnGoingCb ncdata) shutdownCb
-    handleNS (Request (PlayTurn tn card)) = playMyTurn tn card ncdata
-    handleNS (Request ResetNetwork) = do
-      clearPendingDhtOps
-      liftIO $ atomicallyHandleStateUpdate ncdata $ modifyTVar nsTV $ \ ns -> def
-        & status .~ newNetworkStatusSafe AwaitingRequest ns
-        & myID          .~ ns ^. myID
-        & myName        .~ ns ^. myName
+    handleReq (PlayTurn tn card) = playMyTurn tn card ncdata
+    handleReq ResetNetwork = do
+      ns <- liftIO $ readTVarIO nsTV
+      clearPendingDhtOps ns
+      liftIO $ atomicallyHandleStateUpdate ncdata $ modifyTVar nsTV $ \ ns' -> def
+        & status .~ newNetworkStatusSafe AwaitingRequest ns'
+        & myID          .~ ns' ^. myID
+        & myName        .~ ns' ^. myName
+
+handleNetworkStatus :: NetworkStateChannelData -> NetworkStatus -> DhtRunnerM Dht Bool
+handleNetworkStatus (NetworkStateChannelData nsTV _ chan) ShuttingDown = do
+  liftIO $ readTVarIO nsTV >>= atomically . writeTChan chan . NetworkChannelUpdate
+  return False
+handleNetworkStatus ncdata@(NetworkStateChannelData nsTV _ _) nStatus = handleNS nStatus >> handleRequest ncdata >> return True
+  where
+    handleNS SharingGameSetup = shareGameSetup ncdata
+    handleNS SetupPhaseDone = do
+      ns <- liftIO $ readTVarIO nsTV
+      clearPendingDhtOps ns
+      liftIO $ atomicallyHandleStateUpdate ncdata $ modifyTVar nsTV $ \ ns' -> ns' & status .~ newNetworkStatusSafe GameReadyForInitialization ns'
     handleNS _ = return ()
 
 loop :: (MonadIO m, MonadReader NetworkStateChannelData m) => DhtRunnerConfig -> m ()

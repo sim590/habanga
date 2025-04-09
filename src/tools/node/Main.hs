@@ -60,11 +60,12 @@ data AppFocus = Input
               | Log
               | HelpBox
   deriving (Ord, Show, Eq, Enum, Bounded)
-data NodeState = NodeState { _focusRing        :: F.FocusRing AppFocus
-                           , _inputEditor      :: E.Editor String AppFocus
-                           , _logText          :: [String]
-                           , _gameState        :: GameState
-                           , _nodeNetworkState :: TVar NetworkState
+data NodeState = NodeState { _focusRing                 :: F.FocusRing AppFocus
+                           , _inputEditor               :: E.Editor String AppFocus
+                           , _logText                   :: [String]
+                           , _gameState                 :: GameState
+                           , _nodeNetworkState          :: TVar NetworkState
+                           , _nodeNetworkRequestChannel :: TChan NetworkRequest
                            }
 makeLenses ''NodeState
 
@@ -79,9 +80,10 @@ logViewportScroll = M.viewportScroll Log
 
 executeCmd :: EventM AppFocus NodeState ()
 executeCmd = do
-  ie   <- use inputEditor
-  gs   <- use gameState
-  nsTV <- use nodeNetworkState
+  ie      <- use inputEditor
+  gs      <- use gameState
+  nsTV    <- use nodeNetworkState
+  reqChan <- use nodeNetworkRequestChannel
   let
     cmdline      = head $ E.getEditContents ie
     cmdlineToks  = words cmdline
@@ -92,11 +94,11 @@ executeCmd = do
       [n, gc, playerName] -> do
         let mn              = readMaybe n
             theGameSettings = OnlineGameSettings gc (fromMaybe 0 mn)
-        liftIO $ atomically $ modifyTVar nsTV $ status .~ Request (GameAnnounce theGameSettings playerName)
+        liftIO $ atomically $ writeTChan reqChan $ GameAnnounce theGameSettings playerName
         when (isNothing mn) $ logText %= (<>["err.. Le nombre de joueurs '" <> n <> "' n'a pas pu être résolu à un entier!"])
       _ -> logInvalidParameter
     requestJoinGame = case args of
-      [gc, playerName] -> liftIO $ atomically $ modifyTVar nsTV $ status .~ Request (JoinGame gc playerName)
+      [gc, playerName] -> liftIO $ atomically $ writeTChan reqChan $ JoinGame gc playerName
       _                -> logInvalidParameter
     startGame = do
       netState <- liftIO $ readTVarIO nsTV
@@ -107,14 +109,13 @@ executeCmd = do
       gameState .= gs'
       let
         myRank = fromJust $ playerRank (netState^.myName) gs'
-      liftIO $ atomically $ modifyTVar nsTV $ status .~ Request (GameStart myRank)
+      liftIO $ atomically $ writeTChan reqChan $ GameStart myRank
     playTurn = case args of
       [n, strColor, slot] -> do
         netState <- liftIO $ readTVarIO nsTV
         let
           changeNetState ns = case mPlayerTurn of
-           Just pt -> ns & status     .~ Request pt
-                         & turnNumber +~ 1
+           Just pt -> ns & turnNumber +~ 1
            _       -> ns
           mPlayerTurn = do
             c    <- readMaybe strColor
@@ -126,7 +127,7 @@ executeCmd = do
                 | otherwise                    = Nothing
             PlayTurn (netState ^. turnNumber) <$> mCard
         case mPlayerTurn of
-          Just (PlayTurn _ ec) -> do
+          Just pt@(PlayTurn _ ec) -> do
             (mNumberOfCardsDrawn, gs') <- flip runStateT gs $ runMaybeT $ processPlayerTurnAction ec
             case mNumberOfCardsDrawn of
               Just nCardsToDraw  -> do
@@ -134,6 +135,7 @@ executeCmd = do
                   logText %= (<> ["Vous pigez " <> show nCardsToDraw <> " carte(s)!"])
                 gameState .= gs'
                 liftIO $ atomically $ modifyTVar nsTV changeNetState
+                liftIO $ atomically $ writeTChan reqChan pt
               Nothing -> logText %= (<>["err.. Impossible de jouer cette carte!"])
           _ -> logInvalidParameter
       _ -> logInvalidParameter
@@ -148,7 +150,7 @@ executeCmd = do
           liftIO $ atomically $ modifyTVar nsTV $ \ ns -> ns & gameTurns  %~ Map.delete n
                                                              & turnNumber +~ 1
         _ -> logText %= (<>["err.. Aucun tour à traiter!"])
-    resetNetwork = liftIO $ atomically $ modifyTVar nsTV $ status .~ Request ResetNetwork
+    resetNetwork = liftIO $ atomically $ writeTChan reqChan ResetNetwork
     printGameState = do
       netState <- liftIO $ readTVarIO nsTV
       logText %= (<> lines (show gs))
@@ -278,13 +280,15 @@ myForkIO io = do
 main :: IO ()
 main = do
   nsTV    <- liftIO (newTVarIO def)
+  reqChan <- newTChanIO
   netChan <- newTChanIO
-  mv      <- myForkIO $ runReaderT (Network.loop def) (NetworkStateChannelData  nsTV netChan)
-  void $ M.defaultMain app $ NodeState { _focusRing        = F.focusRing $ enumFrom minBound
-                                       , _inputEditor      = E.editor Input Nothing ""
-                                       , _logText          = []
-                                       , _gameState        = def
-                                       , _nodeNetworkState = nsTV
+  mv      <- myForkIO $ runReaderT (Network.loop def) (NetworkStateChannelData  nsTV reqChan netChan)
+  void $ M.defaultMain app $ NodeState { _focusRing                 = F.focusRing $ enumFrom minBound
+                                       , _inputEditor               = E.editor Input Nothing ""
+                                       , _logText                   = []
+                                       , _gameState                 = def
+                                       , _nodeNetworkState          = nsTV
+                                       , _nodeNetworkRequestChannel = reqChan
                                        }
   atomically $ modifyTVar nsTV $ status .~ ShuttingDown
   readMVar mv

@@ -36,7 +36,7 @@ data NetworkEvent = Connection
                   deriving Show
 data NetworkStatus = AwaitingRequest
                    | AwaitingEvent NetworkEvent
-                   | Request NetworkRequest
+                   | TreatingRequest
                    | SharingGameSetup
                    | SetupPhaseDone
                    | GameReadyForInitialization
@@ -97,8 +97,9 @@ instance Show NetworkState where
 
 newtype NetworkChannelUpdate = NetworkChannelUpdate NetworkState
 
-data NetworkStateChannelData = NetworkStateChannelData { _networkState  :: TVar NetworkState
-                                                       , _updateChannel :: TChan NetworkChannelUpdate
+data NetworkStateChannelData = NetworkStateChannelData { _networkState   :: TVar NetworkState
+                                                       , _requestChannel :: TChan NetworkRequest
+                                                       , _updateChannel  :: TChan NetworkChannelUpdate
                                                        }
 makeLenses ''NetworkStateChannelData
 

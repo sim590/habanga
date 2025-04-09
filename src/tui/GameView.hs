@@ -139,8 +139,10 @@ playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> whenIsLocalPlayerTur
 
   case ns ^. NS.status of
     NS.Offline -> return ()
-    _          -> liftIO $ atomically $ modifyTVar nsTV $ \ ns' -> ns' & NS.status     .~ NS.Request (NS.PlayTurn (ns' ^. NS.turnNumber) ec)
-                                                                       & NS.turnNumber +~ 1
+    _          -> do
+      reqChan <- use networkRequestChannel
+      liftIO $ atomically $ writeTChan (reqChan ^?! _Just) $ NS.PlayTurn (ns ^. NS.turnNumber) ec
+      liftIO $ atomically $ modifyTVar nsTV $ NS.turnNumber +~ 1
 
 
 event :: TVar NetworkState -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()

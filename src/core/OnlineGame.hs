@@ -18,7 +18,6 @@ import OpenDHT.InfoHash
 
 import Game
 import GameState
-import qualified Network
 import NetworkState
 import Random
 
@@ -30,27 +29,31 @@ shuffledPlayerNames ns = deterministiclyShuffle sortedPlayerNames
   where
     sortedPlayerNames = List.sort $ Map.elems $ ns ^. playersIdentities
 
-createGame :: MonadIO m => TVar NetworkState -> String -> Int -> m ()
-createGame nsTV playerName numberOfPlayers' = do
+resetNetwork :: (MonadIO m) => Maybe (TChan NetworkRequest) -> m ()
+resetNetwork Nothing        = return ()
+resetNetwork (Just reqChan) = liftIO $ atomically $ writeTChan reqChan ResetNetwork
+
+createGame :: MonadIO m => TChan NetworkRequest -> String -> Int -> m ()
+createGame reqChan playerName numberOfPlayers' = do
   rHash <- liftIO $ unDht randomInfoHash
   let
     gc              = take _GAME_CODE_LENGTH_ $ show rHash
     playerNameStr   = playerName
     theGameSettings = OnlineGameSettings gc numberOfPlayers'
-  Network.requestNetwork nsTV $ GameAnnounce theGameSettings playerNameStr
+  liftIO $ atomically $ writeTChan reqChan $ GameAnnounce theGameSettings playerNameStr
 
-joinGame :: MonadIO m => TVar NetworkState -> String -> String -> m ()
-joinGame nsTV playerName gc = Network.requestNetwork nsTV $ JoinGame gc playerName
+joinGame :: MonadIO m => TChan NetworkRequest -> String -> String -> m ()
+joinGame reqChan playerName gc = liftIO $ atomically $ writeTChan reqChan $ JoinGame gc playerName
 
-startGame :: MonadIO m => TVar NetworkState -> m GameState
-startGame nsTV = liftIO (readTVarIO nsTV) >>= \ ns -> do
+startGame :: MonadIO m => NetworkState -> TChan NetworkRequest -> m GameState
+startGame ns reqChan = do
   let
     playerName  = ns ^. myName
     gen         = randomGeneratorFromNetworkState ns
     shuffPNames = shuffledPlayerNames ns gen
   gs <- liftIO $ initialize shuffPNames gen
   let myRank = fromJust $ playerRank playerName gs
-  Network.requestNetwork nsTV $ GameStart myRank
+  liftIO $ atomically $ writeTChan reqChan $ GameStart myRank
   return gs
 
 myCurrentPosInPlayerList :: NetworkState -> Int

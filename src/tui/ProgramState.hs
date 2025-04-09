@@ -21,13 +21,16 @@ import Data.FileEmbed
 
 import Control.Lens
 import Control.Concurrent
+import Control.Concurrent.STM
 
 import Brick.BChan
 import Brick.Forms
 import Brick.Focus
 
 import GameState
-import NetworkState (NetworkState)
+import NetworkState ( NetworkState
+                    , NetworkRequest
+                    )
 import qualified BrickNetworkBridge as BNB
 
 _HABANGA_MAX_PLAYER_COUNT_ :: Int
@@ -125,25 +128,26 @@ makeLenses ''GameViewState
 instance Default GameViewState where
   def = GameViewState 0 Nothing []
 
-data ProgramState = ProgramState { _gameState            :: GameState
-                                 , _networkState         :: NetworkState
-                                 , _programResources     :: ProgramResources
-                                 , _mainMenuState        :: MainMenuState
-                                 , _gameViewState        :: GameViewState
-                                 , _currentFocus         :: FocusRing AppFocus
-                                 , _brickEventChannel    :: Maybe (BChan BNB.NetworkBrickEvent)
-                                 , _networkMV            :: Maybe (MVar ())
-                                 , _brickNetworkBridgeMV :: Maybe (MVar ())
+data ProgramState = ProgramState { _gameState             :: GameState
+                                 , _networkState          :: NetworkState
+                                 , _programResources      :: ProgramResources
+                                 , _mainMenuState         :: MainMenuState
+                                 , _gameViewState         :: GameViewState
+                                 , _currentFocus          :: FocusRing AppFocus
+                                 , _networkRequestChannel :: Maybe (TChan NetworkRequest)
+                                 , _brickEventChannel     :: Maybe (BChan BNB.NetworkBrickEvent)
+                                 , _networkMV             :: Maybe (MVar ())
+                                 , _brickNetworkBridgeMV  :: Maybe (MVar ())
                                  }
 makeLenses ''ProgramState
 
 instance Default ProgramState where
-  def = ProgramState { _gameState            = def
-                     , _networkState         = def
-                     , _programResources     = def
-                     , _mainMenuState        = def
-                     , _gameViewState        = def
-                     , _currentFocus         = focusRing [ MainMenu MainMenuButtons
+  def = ProgramState { _gameState             = def
+                     , _networkState          = def
+                     , _programResources      = def
+                     , _mainMenuState         = def
+                     , _gameViewState         = def
+                     , _currentFocus          = focusRing [ MainMenu MainMenuButtons
                                                          , MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
                                                          , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
                                                          , MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
@@ -152,9 +156,10 @@ instance Default ProgramState where
                                                          , OptionsMenu
                                                          , Game Nothing
                                                          ]
-                     , _brickEventChannel    = Nothing
-                     , _networkMV            = Nothing
-                     , _brickNetworkBridgeMV = Nothing
+                     , _networkRequestChannel = Nothing
+                     , _brickEventChannel     = Nothing
+                     , _networkMV             = Nothing
+                     , _brickNetworkBridgeMV  = Nothing
                      }
 
 instance GameStated ProgramState where

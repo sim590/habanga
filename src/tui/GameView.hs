@@ -124,7 +124,7 @@ playCard sidedCard = do
 playMyTurn :: TVar NetworkState -> Either () () -> T.EventM AppFocus ProgramState ()
 playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> whenIsLocalPlayerTurn ns $ do
   thePlayers <- use (gameState . players)
-  cardIdx <- use (gameViewState . gameViewIndex)
+  cardIdx    <- use (gameViewState . gameViewIndex)
   let
     currentPlayer = head thePlayers
     card          = (currentPlayer^.cardsInHand) !! cardIdx
@@ -163,7 +163,7 @@ event nsTV ev = do
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'l') [] )) = goRight ns
     mainEvent (T.VtyEvent (V.EvKey V.KLeft       [] )) = goLeft ns
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'h') [] )) = goLeft ns
-    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = goBackOrQuit
+    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = use networkRequestChannel >>= OnlineGame.resetNetwork >> goBackOrQuit
     mainEvent _                                        = return ()
 
   Game.winner >>= \ case

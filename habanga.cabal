@@ -49,8 +49,8 @@ common common-base
                         mtl          ^>= 2.2.2,
                         containers   ^>= 0.6.7,
                         data-default ^>= 0.8.0,
-                        stm,
-                        extra
+                        stm          ^>= 2.5.1,
+                        extra        ^>= 1.8,
 common common-exe
     ghc-options:        -threaded
 
@@ -64,15 +64,16 @@ library habanga-core
     import:             common-base,
                         common-lang
     exposed-modules:    Game
+                        OnlineGame
                         Cards
                         GameState
                         NetworkState
                         Network
                         Random
-    build-depends:      random >= 1.2.1 && < 1.3,
-                        opendht-hs,
-                        serialise,
-                        bytestring
+    build-depends:      random     ^>= 1.2.1,
+                        opendht-hs ^>= 0.1.0,
+                        serialise  ^>= 0.2.6,
+                        bytestring ^>= 0.11.5,
     hs-source-dirs:     src/core
 
 executable habanga-node
@@ -96,8 +97,11 @@ executable habanga-tui
                         MainMenu,
                         GameView,
                         Widgets
+                        BrickNetworkBridge
     build-depends:      habanga-core,
                         text       ^>= 2.0.2,
-                        file-embed ^>= 0.0.16
+                        file-embed ^>= 0.0.16,
+                        opendht-hs,
+                        directory  ^>= 1.3.7,
     hs-source-dirs:     src/tui
 

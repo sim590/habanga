@@ -14,13 +14,11 @@
 module GameState where
 
 import Data.Default
+import qualified Data.List as List
 
 import Control.Lens
-import Control.Monad.IO.Class
-import Control.Concurrent.STM
 
 import Cards
-import NetworkState
 
 data CardsOnTable = CardsOnTable { _red    :: (Card, Card)
                                  , _yellow :: (Card, Card)
@@ -45,17 +43,9 @@ data GameState = GameState { _cardsOnTable :: CardsOnTable
                            , _deck         :: [Card]
                            , _players      :: [PlayerState]
                            }
-               | OnlineGameState { _cardsOnTable :: CardsOnTable
-                                 , _deck         :: [Card]
-                                 , _players      :: [PlayerState]
-                                 , _networkState :: TVar NetworkState
-                                 }
 makeLenses ''GameState
 
 class GameStated a where
-  -- TODO: de façon à utiliser TVar
-  -- getGameState :: a -> IO GameState
-  -- setGameState :: a -> GameState -> IO a
   getGameState :: a -> GameState
   setGameState :: a -> GameState -> a
 
@@ -89,14 +79,6 @@ instance Show GameState where
                       , unlines $ map ("    "++) (lines (show $ gs^.cardsOnTable))
                       ]
 
-defaultOnlineGameState :: MonadIO m => m GameState
-defaultOnlineGameState = liftIO (newTVarIO def) >>= \ nsTV ->
-  return OnlineGameState { _cardsOnTable = def ^. cardsOnTable
-                         , _deck         = def ^. deck
-                         , _players      = def ^. players
-                         , _networkState = nsTV
-                         }
-
 {-| Lentille (Lens' s GameState)
 
    Ceci permet d'interagir avec GameState dans (MonadState s).
@@ -104,6 +86,9 @@ defaultOnlineGameState = liftIO (newTVarIO def) >>= \ nsTV ->
 gameStateLens :: (GameStated s, Functor f)
               => (GameState -> f GameState) -> s -> f s --
 gameStateLens g s = fmap (setGameState s) (g $ getGameState s)
+
+playerRank :: String -> GameState -> Maybe Int
+playerRank pname gs = List.elemIndex pname $ map (view name) (gs^.players)
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

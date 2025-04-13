@@ -8,8 +8,10 @@
   Maintainer  : sim.desaulniers@gmail.com
 -}
 
-module Widgets ( button
+module Widgets ( NamedButton
+               , button
                , buttonAttrs
+               , popUpWidgetDimensions
                ) where
 
 import Brick.AttrMap
@@ -17,11 +19,18 @@ import Brick.Types (Widget)
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
 import Brick.Widgets.Core ( hLimit
+                          , vLimit
                           , withAttr
                           , str
                           )
 
 import qualified Graphics.Vty as V
+
+-- Signature de `button` avec son premier paramètre appliqué.
+type NamedButton n = Int -> Int -> Int -> AttrName -> Widget n
+
+popUpWidgetDimensions :: Widget n -> Widget n
+popUpWidgetDimensions = hLimit 40 . vLimit 5
 
 buttonAttrs :: [(AttrName, V.Attr)]
 buttonAttrs = [ ]

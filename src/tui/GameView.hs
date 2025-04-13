@@ -19,11 +19,8 @@ import Data.Either.Extra
 import qualified Data.Text as Text
 
 import Control.Monad
-import Control.Monad.IO.Class
 import Control.Lens
 import Control.Monad.Trans.Maybe
-
-import Control.Concurrent.STM
 
 import Brick.AttrMap
 import Brick.Focus ( focusSetCurrent

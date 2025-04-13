@@ -8,7 +8,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Default
 
-import Control.Concurrent.STM.TVar
 import Control.Concurrent.STM.TChan
 import Control.Lens
 

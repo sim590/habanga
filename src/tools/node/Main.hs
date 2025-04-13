@@ -22,7 +22,6 @@ import Text.Read
 import Control.Monad
 import Control.Monad.Trans.Maybe
 import Control.Monad.State
-import Control.Monad.Reader
 import Control.Lens
 import Control.Concurrent
 import Control.Concurrent.STM

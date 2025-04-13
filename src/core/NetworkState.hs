@@ -31,6 +31,7 @@ data NetworkRequest = GameAnnounce OnlineGameSettings String
                     | PlayTurn (Either Card Card)
                     | UpdateTurnNumber Word16
                     | ResetNetwork
+                    | Shutdown
                     deriving Show
 data NetworkEvent = Connection
                   | GameStarted
@@ -98,11 +99,10 @@ instance Show NetworkState where
 
 newtype NetworkChannelUpdate = NetworkChannelUpdate NetworkState
 
-data NetworkStateChannelData = NetworkStateChannelData { _networkState   :: TVar NetworkState
-                                                       , _requestChannel :: TChan NetworkRequest
-                                                       , _updateChannel  :: TChan NetworkChannelUpdate
-                                                       }
-makeLenses ''NetworkStateChannelData
+data NetworkTwoWayChannel = NetworkTwoWayChannel { _requestChannel :: TChan NetworkRequest
+                                                 , _updateChannel  :: TChan NetworkChannelUpdate
+                                                 }
+makeLenses ''NetworkTwoWayChannel
 
 _GAME_CODE_LENGTH_ :: Int
 _GAME_CODE_LENGTH_ = 6

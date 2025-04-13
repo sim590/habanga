@@ -43,10 +43,10 @@ import qualified MainMenu
 import qualified GameView
 import qualified BrickNetworkBridge as BNB
 
-appEvent :: TVar NetworkState -> BrickEvent AppFocus BNB.NetworkBrickEvent -> EventM AppFocus ProgramState ()
-appEvent nsTV e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
-  Just (MainMenu _) -> MainMenu.event nsTV e
-  Just (Game     _) -> GameView.event nsTV e
+appEvent :: BrickEvent AppFocus BNB.NetworkBrickEvent -> EventM AppFocus ProgramState ()
+appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
+  Just (MainMenu _) -> MainMenu.event e
+  Just (Game     _) -> GameView.event e
   _                 -> return ()
 
 appChooseCursor :: ProgramState -> [CursorLocation AppFocus] -> Maybe (CursorLocation AppFocus)
@@ -78,24 +78,26 @@ drawUI ps = case focusGetCurrent (ps^.currentFocus) of
   Just (Game     _) -> GameView.widget ps
   s                 -> error $ "drawUI: l'écran '" <> show (fromJust s) <> "' n'est pas implanté!"
 
-app :: TVar NetworkState -> M.App ProgramState BNB.NetworkBrickEvent AppFocus
-app nsTV = M.App { M.appDraw         = drawUI
+app :: M.App ProgramState BNB.NetworkBrickEvent AppFocus
+app = M.App { M.appDraw         = drawUI
                  , M.appChooseCursor = appChooseCursor
-                 , M.appHandleEvent  = appEvent nsTV
+                 , M.appHandleEvent  = appEvent
                  , M.appStartEvent   = currentFocus %= focusSetCurrent (MainMenu MainMenuButtons)
                  , M.appAttrMap      = const attrsMap
                  }
 
 main :: IO ()
 main = do
-  nsTV      <- liftIO (newTVarIO def)
-  brickchan <- liftIO $ newBChan 10
+  netReqChan <- liftIO newTChanIO
+  brickchan  <- liftIO $ newBChan 10
 
   let buildVty = mkVty VConfig.defaultConfig
   initialVty        <- buildVty
-  finalProgramState <- M.customMain initialVty buildVty (Just brickchan) (app nsTV) $ def { _brickEventChannel = Just brickchan }
+  finalProgramState <- M.customMain initialVty buildVty (Just brickchan) app $ def { _brickEventChannel     = Just brickchan
+                                                                                   , _networkRequestChannel = Just netReqChan
+                                                                                   }
 
-  atomically $ modifyTVar nsTV $ status .~ ShuttingDown
+  atomically $ writeTChan netReqChan Shutdown
   maybe (return ()) readMVar $ finalProgramState ^. networkMV
   maybe (return ()) readMVar $ finalProgramState ^. brickNetworkBridgeMV
 

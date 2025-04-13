@@ -277,7 +277,7 @@ main = do
   nsTV    <- liftIO (newTVarIO def)
   reqChan <- newTChanIO
   netChan <- newTChanIO
-  mv      <- myForkIO $ runReaderT (Network.loop def) (NetworkStateChannelData  nsTV reqChan netChan)
+  mv      <- myForkIO $ Network.loop def (NetworkTwoWayChannel reqChan netChan)
   void $ M.defaultMain app $ NodeState { _focusRing                 = F.focusRing $ enumFrom minBound
                                        , _inputEditor               = E.editor Input Nothing ""
                                        , _logText                   = []

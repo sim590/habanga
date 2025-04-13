@@ -24,7 +24,6 @@ import qualified Data.Map as Map
 
 import Control.Lens
 import Control.Monad.State
-import Control.Monad.Reader
 import Control.Concurrent.STM
 
 import Brick.Util
@@ -68,7 +67,6 @@ import Network (forkFinallyWithMvar)
 import qualified Network
 import qualified BrickNetworkBridge
 import qualified BrickNetworkBridge as BNB
-import NetworkState (NetworkState)
 import qualified NetworkState as NS
 
 type MenuButtonActionPairList = [(NamedButton AppFocus, T.EventM AppFocus ProgramState ())]
@@ -98,27 +96,26 @@ goBackOrQuit = use (mainMenuState.submenu) >>= \ case
   Just (OnlineLobby _)                -> mainMenuState.submenu .= Just (OnlineGameSubMenu 0)
   _                                   -> M.halt
 
-withNetwork :: TVar NetworkState -> (TChan NS.NetworkRequest -> T.EventM AppFocus ProgramState ()) -> T.EventM AppFocus ProgramState ()
-withNetwork nsTV actionRequiringNetwork = get >>= \ ps -> do
+withNetwork :: (TChan NS.NetworkRequest -> T.EventM AppFocus ProgramState ()) -> T.EventM AppFocus ProgramState ()
+withNetwork actionRequiringNetwork = get >>= \ ps -> do
+  mReqChan <- use networkRequestChannel
+  let reqChan = mReqChan ^?! _Just
   unless (isJust (ps ^. networkMV)) $ do
-    reqChan <- liftIO newTChanIO
     netChan <- liftIO newTChanIO
-    let chanData = NS.NetworkStateChannelData nsTV reqChan netChan
-    nMV     <- liftIO $ forkFinallyWithMvar $ runReaderT (Network.loop def) chanData
+    let chanData = NS.NetworkTwoWayChannel reqChan netChan
+    nMV     <- liftIO $ forkFinallyWithMvar $ Network.loop def chanData
     bnbMV   <- liftIO $ forkFinallyWithMvar $ BrickNetworkBridge.loop netChan (ps ^?! brickEventChannel . _Just)
-    networkRequestChannel .= Just reqChan
     networkMV             .= Just nMV
     brickNetworkBridgeMV  .= Just bnbMV
-  reqChan <- use networkRequestChannel
-  actionRequiringNetwork (reqChan ^?! _Just)
+  actionRequiringNetwork reqChan
 
 startGame :: [String] -> T.EventM AppFocus ProgramState ()
 startGame playerList = do
   gameState <~ liftIO (initializeIO playerList)
   currentFocus %= focusSetCurrent (Game Nothing)
 
-event :: TVar NetworkState -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
-event _ (T.AppEvent (BNB.NetworkBrickUpdate ns)) = networkState .= ns >> do
+event :: T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
+event (T.AppEvent (BNB.NetworkBrickUpdate ns)) = networkState .= ns >> do
   submenu' <- use (mainMenuState.submenu)
   case (submenu', ns ^. NS.status) of
     (Just (OnlineLobby _), NS.GameReadyForInitialization) -> do
@@ -127,7 +124,7 @@ event _ (T.AppEvent (BNB.NetworkBrickUpdate ns)) = networkState .= ns >> do
       currentFocus          %= focusSetCurrent (Game Nothing)
       mainMenuState.submenu .= Nothing
     _ -> return ()
-event nsTV ev = do
+event ev = do
   let
     buttonMenuEvents :: MenuButtonActionPairList -> Traversal' ProgramState Int -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
     buttonMenuEvents menuButtons menuIndexLens (T.VtyEvent (V.EvKey V.KEnter      [])) = selectEntry menuButtons menuIndexLens
@@ -166,7 +163,7 @@ event nsTV ev = do
             validFields          = validName && validNumberOfPlayers
           mainMenuState . submenu . _Just . gameForm %= setFieldValid validNumberOfPlayers numberOfPlayersField
           when validFields $ do
-            withNetwork nsTV $ \ reqChan -> OnlineGame.createGame reqChan playerName numberOfPlayers'
+            withNetwork $ \ reqChan -> OnlineGame.createGame reqChan playerName numberOfPlayers'
             mainMenuState . submenu .= Just (OnlineLobby Host)
         OtherPlayer -> do
           let
@@ -176,7 +173,7 @@ event nsTV ev = do
             gameCodeField = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormGameCodeField)
           mainMenuState . submenu . _Just . gameForm %= setFieldValid validCode gameCodeField
           when validFields $ do
-            withNetwork nsTV $ \ reqChan -> OnlineGame.joinGame reqChan playerName gc
+            withNetwork $ \ reqChan -> OnlineGame.joinGame reqChan playerName gc
             mainMenuState . submenu .= Just (OnlineLobby OtherPlayer)
 
     formEvents (OnlineGameInitialization f _) _ = nestEventM' f (handleFormEvent ev) >>= (mainMenuState . submenu . _Just . onlineGameForm .=)

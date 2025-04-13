@@ -121,8 +121,8 @@ playCard sidedCard = do
   theWinner <- Game.winner
   gameViewState . winner .= ((^.name) <$> theWinner)
 
-playMyTurn :: TVar NetworkState -> Either () () -> T.EventM AppFocus ProgramState ()
-playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> whenIsLocalPlayerTurn ns $ do
+playMyTurn :: Either () () -> T.EventM AppFocus ProgramState ()
+playMyTurn side = use networkState >>= \ ns -> whenIsLocalPlayerTurn ns $ do
   thePlayers <- use (gameState . players)
   cardIdx    <- use (gameViewState . gameViewIndex)
   let
@@ -141,20 +141,20 @@ playMyTurn nsTV side = liftIO (readTVarIO nsTV) >>= \ ns -> whenIsLocalPlayerTur
     NS.Offline -> return ()
     _          -> use networkRequestChannel >>= \ mReqChan -> OnlineGame.playMyTurn ec (mReqChan ^?! _Just)
 
-event :: TVar NetworkState -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
-event _ (T.AppEvent (BNB.NetworkBrickUpdate ns)) = do
+event :: T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
+event (T.AppEvent (BNB.NetworkBrickUpdate ns)) = do
   reqChan <- use networkRequestChannel
   turns <- OnlineGame.consumeConsecutivePlayerTurns ns (reqChan ^?! _Just)
   forM_ turns $ \ (_, card) -> playCard card
   networkState .= ns
-event nsTV ev = do
-  ns <- liftIO $ readTVarIO nsTV
+event ev = do
+  ns <- use networkState
   let
     quitOrNothing (T.VtyEvent (V.EvKey (V.KChar 'q') [] )) = goBackOrQuit
     quitOrNothing _                                        = return ()
 
-    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'z') [] )) = playMyTurn nsTV (Left ())
-    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'c') [] )) = playMyTurn nsTV (Right ())
+    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'z') [] )) = playMyTurn (Left ())
+    mainEvent (T.VtyEvent (V.EvKey (V.KChar 'c') [] )) = playMyTurn (Right ())
     mainEvent (T.VtyEvent (V.EvKey V.KRight      [] )) = goRight ns
     mainEvent (T.VtyEvent (V.EvKey (V.KChar 'l') [] )) = goRight ns
     mainEvent (T.VtyEvent (V.EvKey V.KLeft       [] )) = goLeft ns

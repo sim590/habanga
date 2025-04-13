@@ -164,11 +164,11 @@ playMyTurn tn card nsTV n2wChan@(NetworkTwoWayChannel _ _) = liftIO (readTVarIO 
   liftIO $ atomicallyHandleStateUpdate nsTV n2wChan $ modifyTVar nsTV $ \ ns' -> ns' & status .~ newNetworkStatusSafe (GameOnGoing AwaitingOtherPlayerTurn) ns'
   void $ DhtRunner.put gcHash playerTurnValue doneCb False
 
-gameOnGoingCb :: TVar NetworkState -> NetworkTwoWayChannel -> ValueCallback
-gameOnGoingCb _    _                                  (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
-gameOnGoingCb _    _                                  (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
-gameOnGoingCb _    _                                  (StoredValue {})            True = return True
-gameOnGoingCb nsTV n2wChan@(NetworkTwoWayChannel _ _) (StoredValue d _ _ _ utype) False
+gameOnGoingCb :: GameCode -> TVar NetworkState -> NetworkTwoWayChannel -> ValueCallback
+gameOnGoingCb _ _    _                                  (InputValue {})             _    = error $ opendhtWrongValueCtorError "InputValue"
+gameOnGoingCb _ _    _                                  (MetaValue {})              _    = error $ opendhtWrongValueCtorError "MetaValue"
+gameOnGoingCb _ _    _                                  (StoredValue {})            True = return True
+gameOnGoingCb gc nsTV n2wChan@(NetworkTwoWayChannel _ _) (StoredValue d _ _ _ utype) False
   | utype == _PLAYER_TURN_UTYPE_ = deserialiseAndTreatPacket
   | otherwise                    = return True
   where
@@ -178,8 +178,9 @@ gameOnGoingCb nsTV n2wChan@(NetworkTwoWayChannel _ _) (StoredValue d _ _ _ utype
         Left (DeserialiseFailure {}) -> return True
         Right habangaPacket          -> atomicallyHandleStateUpdate nsTV n2wChan $ stateTVar nsTV $ treatPacket habangaPacket
     treatPacket (HabangaPacket sId (PlayerTurn card tn)) ns
-      | sId == ns ^. myID = (True, ns)
-      | otherwise         = (True, ns')
+      | sId == ns ^. myID                   = (True, ns)
+      | gc /= ns ^. gameSettings . gameCode = (True, ns)
+      | otherwise                           = (True, ns')
       where
         ns'            = ns & gameTurns .~ gameTurns'
                             & status    .~ newNetworkStatusSafe networkStatus' ns
@@ -352,11 +353,12 @@ handleRequest nsTV n2wChan@(NetworkTwoWayChannel reqChan _) = liftIO (atomically
         networkStatus'
           | myRank == 0 = GameOnGoing AwaitingPlayerTurn
           | otherwise   = GameOnGoing AwaitingOtherPlayerTurn
+        gc = ns ^. gameSettings . gameCode
       liftIO $ atomicallyHandleStateUpdate nsTV n2wChan $ modifyTVar nsTV $ \ ns' -> ns'
         & status .~ newNetworkStatusSafe networkStatus' ns'
         & myPlayerRank  .~ myRank
         & turnNumber    .~ 0
-      void $ DhtRunner.listen gcHash (gameOnGoingCb nsTV n2wChan) (return ())
+      void $ DhtRunner.listen gcHash (gameOnGoingCb gc nsTV n2wChan) (return ())
     handleReq (PlayTurn card) = do
       ns <- liftIO $ readTVarIO nsTV
       liftIO $ atomically $ modifyTVar nsTV $ turnNumber +~ 1

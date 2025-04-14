@@ -105,3 +105,15 @@ executable habanga-tui
                         directory  ^>= 1.3.7,
     hs-source-dirs:     src/tui
 
+executable habanga-gui
+    import:             common-base,
+                        common-lang,
+                        common-exe,
+    main-is:            Main.hs
+    build-depends:      habanga-core,
+                        opendht-hs,
+                        sdl2,
+                        sdl2-ttf,
+                        text
+    hs-source-dirs:     src/gui
+

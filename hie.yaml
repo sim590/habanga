@@ -7,6 +7,8 @@ cradle:
       component: "habanga-tui"
     - path: "src/tools/node"
       component: "habanga-node"
+    - path: "src/gui"
+      component: "habanga-gui"
 
 #  vim: set sts=2 ts=4 sw=2 tw=80 et :
 

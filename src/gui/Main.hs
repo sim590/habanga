@@ -81,11 +81,19 @@ loop :: StateT ProgramState IO ()
 loop = whileM $ do
   renderer <- use sdlRenderer
   texture <- use $ textureMap . at "salut" . to fromJust
+  events <- SDL.pollEvents
+  let eventIsQPress event =
+        case SDL.eventPayload event of
+          SDL.KeyboardEvent keyboardEvent ->
+            SDL.keyboardEventKeyMotion keyboardEvent == SDL.Pressed &&
+            SDL.keysymKeycode (SDL.keyboardEventKeysym keyboardEvent) == SDL.KeycodeQ
+          _ -> False
+      qPressed = any eventIsQPress events
 
   SDL.copy renderer texture Nothing Nothing
   SDL.present renderer
   liftIO $ threadDelay (1000000 `div` 60)
-  return True
+  return $ not qPressed
 
 main :: IO ()
 main = do

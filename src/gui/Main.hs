@@ -29,6 +29,8 @@ import Control.Concurrent
 import Control.Monad.State
 import Control.Lens
 
+import System.Environment
+
 import qualified SDL
 import SDL.Font (Font)
 import qualified SDL.Font as SDLF
@@ -84,7 +86,8 @@ loadTextures = do
 
 loadFonts :: StateT ProgramState IO ()
 loadFonts = do
-  font <- SDLF.load "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf" 12
+  homeDir <- liftIO $ getEnv "HOME"
+  font    <- SDLF.load (homeDir <> "/.local/share/fonts/mighty-souly-font/MightySouly-lxggD.ttf") 64
   fontMap %= Map.insert "default" font
 
 loadData :: StateT ProgramState IO ()

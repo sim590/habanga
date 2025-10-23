@@ -106,6 +106,8 @@ continueLoop = use (keyboardState . pressedKeys) <&> not . Set.member SDL.Keycod
 loop :: StateT ProgramState IO ()
 loop = whileM $ do
   renderer <- use sdlRenderer
+  SDL.clear renderer
+
   texture <- use $ textureMap . at "salut" . to fromJust
 
   events <- SDL.pollEvents

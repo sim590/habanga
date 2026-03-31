@@ -110,7 +110,10 @@ executable habanga-gui
                         common-lang,
                         common-exe
     main-is:            Main.hs
-    other-modules:      MenuState
+    other-modules:      MenuState,
+                        ProgramState,
+                        Textures,
+                        Textures.Menu
     build-depends:      habanga-core,
                         opendht-hs,
                         sdl2,

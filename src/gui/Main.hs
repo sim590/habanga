@@ -11,60 +11,28 @@
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
-import Data.Set (Set)
 import qualified Data.Set as Set
-import Data.Default
 import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Map (Map)
 import qualified Data.Map as Map
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Unsafe as BSU
-import Data.FileEmbed (embedFile, makeRelativeToProject)
 
 import Foreign.C.Types (CInt)
-import Foreign.Ptr (castPtr)
-import Unsafe.Coerce (unsafeCoerce)
 
 import Control.Monad.Extra ( whileM )
 import Control.Concurrent
 import Control.Monad.State
 import Control.Lens
 
+import ProgramState
 import MenuState
+import Textures.Menu (loadMenuTextures)
 
 import System.Environment
 
 import qualified SDL
-import qualified SDL.Raw
-import qualified SDL.Raw.Image as SDLRI
-import SDL.Internal.Types (Renderer(..))
-import SDL.Font (Font)
 import qualified SDL.Font as SDLF
-
-newtype KeyboardState = KeyboardState { _pressedKeys :: Set SDL.Keycode
-                                      }
-makeLenses ''KeyboardState
-
-instance Default KeyboardState where
-  def = KeyboardState $ Set.fromList []
-
-data ProgramState = ProgramState { _sdlRenderer   :: SDL.Renderer
-                                 , _fontMap       :: Map String Font
-                                 , _textureMap    :: Map String SDL.Texture
-                                 , _keyboardState :: KeyboardState
-                                 , _menuSt        :: MenuState
-                                 }
-
-makeLenses ''ProgramState
-
--- | Créer l'état initial du programme
-initProgramState :: SDL.Renderer -> ProgramState
-initProgramState renderer = ProgramState renderer mempty mempty def def
 
 -- TODO: centraliser les variables utiles entre le tui et le gui dans le noyau
 _GAME_TITLE_ :: Text
@@ -89,48 +57,6 @@ cleanSDL window renderer = do
   SDL.destroyWindow window
   SDLF.quit
 
--- | Image de fond du menu, imbriquée dans le binaire à la compilation
-bgImageData :: BS.ByteString
-bgImageData = $(makeRelativeToProject "resources/habanga-gui/fond-ecran.png" >>= embedFile)
-
--- | Charger une texture PNG depuis un ByteString imbriqué
-loadEmbeddedPNG :: SDL.Renderer -> BS.ByteString -> IO SDL.Texture
-loadEmbeddedPNG (Renderer rPtr) bs =
-  BSU.unsafeUseAsCStringLen bs $ \ (ptr, len) -> do
-    rwops   <- SDL.Raw.rwFromConstMem (castPtr ptr) (fromIntegral len)
-    surfPtr <- SDLRI.loadPNG_RW rwops
-    tex     <- SDL.Raw.createTextureFromSurface rPtr surfPtr
-    SDL.Raw.freeSurface surfPtr
-    return (unsafeCoerce tex :: SDL.Texture)
-
--- TODO: les textures devraient sûrement être placées dans un module à part.
--- Toutes ces textures seront ensuite chargées dans l'état du programme.
-loadTextures :: StateT ProgramState IO ()
-loadTextures = do
-  let white  = SDL.V4 255 255 255 255
-      yellow = SDL.V4 255 220 0   255
-  renderer <- use sdlRenderer
-  fonts    <- use fontMap
-  let font = fonts Map.! "default"
-  -- Fond d'écran du menu (imbriqué dans le binaire)
-  bgTex <- liftIO $ loadEmbeddedPNG renderer bgImageData
-  textureMap %= Map.insert "menu-bg" bgTex
-  -- Titre
-  titleSurf <- SDLF.solid font (SDL.V4 255 180 0 255) (T.pack "HABANGA")
-  titleTex  <- SDL.createTextureFromSurface renderer titleSurf
-  SDL.freeSurface titleSurf
-  textureMap %= Map.insert "menu-title" titleTex
-  -- Options du menu (version normale et sélectionnée)
-  forM_ (zip [0..] menuTexts) $ \ (i, txt) -> do
-    surf    <- SDLF.solid font white (T.pack txt)
-    tex     <- SDL.createTextureFromSurface renderer surf
-    SDL.freeSurface surf
-    textureMap %= Map.insert ("menu-" <> show (i :: Int)) tex
-    surfSel <- SDLF.solid font yellow (T.pack $ "> " <> txt <> " <")
-    texSel  <- SDL.createTextureFromSurface renderer surfSel
-    SDL.freeSurface surfSel
-    textureMap %= Map.insert ("menu-sel-" <> show i) texSel
-
 loadFonts :: StateT ProgramState IO ()
 loadFonts = do
   homeDir <- liftIO $ getEnv "HOME"
@@ -138,7 +64,7 @@ loadFonts = do
   fontMap %= Map.insert "default" font
 
 loadData :: StateT ProgramState IO ()
-loadData = loadFonts >> loadTextures
+loadData = loadFonts >> loadMenuTextures
 
 -- | Gestion de l'input du menu à partir d'un événement SDL
 handleMenuEvent :: SDL.EventPayload -> StateT ProgramState IO ()

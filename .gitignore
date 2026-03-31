@@ -14,3 +14,7 @@ dist-newstyle
 *.exe
 *.out
 *.app
+*.so
+*.dylib
+*.dll
+*.a

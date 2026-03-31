@@ -28,6 +28,8 @@ import Control.Monad.Extra ( whileM )
 import Control.Concurrent
 import Control.Monad.State
 import Control.Lens
+import qualified GUI.MenuState as M
+import qualified GUI.MenuState as M
 
 import System.Environment
 
@@ -46,8 +48,41 @@ data ProgramState = ProgramState { _sdlRenderer   :: SDL.Renderer
                                  , _fontMap       :: Map String Font
                                  , _textureMap    :: Map String SDL.Texture
                                  , _keyboardState :: KeyboardState
+                                 , _menuState     :: MenuState
                                  }
+
 makeLenses ''ProgramState
+
+-- Create initial ProgramState with renderer, empty maps, and default settings
+initProgramState :: SDL.Renderer -> IO ProgramState
+initProgramState renderer = ProgramState renderer mempty mempty def (MenuState 0 True)
+
+-- State transition logic
+handleMenuInput :: Event -> ProgramState -> ProgramState
+handleMenuInput event (ProgramState renderer _ _ _ (MenuState option open)) = case event of
+    KeyPress key -> case key of
+        SDLK_SPACE -> closeMenu
+        SDLK_w -> changeMenuOption (option - 1) open
+        SDLK_s -> changeMenuOption (option + 1) open
+        _ -> id
+    case event of
+        KeyPress key -> case key of
+            SDLK_SPACE -> closeMenu
+            SDLK_w -> changeMenuOption (option - 1) open
+            SDLK_s -> changeMenuOption (option + 1) open
+            _ -> id
+        KeyDown key -> if open
+            then case key of
+                Char 'w' -> ProgramState renderer _ _ _ (MenuState (option - 1) True)
+                Char 's' -> ProgramState renderer _ _ _ (MenuState (option + 1) True)
+                Char ' ' -> ProgramState renderer _ _ _ (MenuState option False)
+            else ProgramState renderer _ _ _ (MenuState option True)
+        EventMouse MouseButtonLeft Down -> closeMenu
+        EventKey (Char '\x1b') Down -> closeMenu
+        _ -> ProgramState renderer _ _ _ (MenuState option open)
+        EventMouse MouseButtonLeft Down -> closeMenu
+        EventKey (Char '\x1b') Down -> closeMenu
+        _ -> ProgramState renderer _ _ _ (MenuState option open)
 
 
 -- TODO: centraliser les variables utiles entre le tui et le gui dans le noyau
@@ -127,7 +162,7 @@ main = do
   window   <- SDL.createWindow _GAME_TITLE_ windowConfig
   renderer <- SDL.createRenderer window (-1) SDL.defaultRenderer
 
-  finalState <- execStateT (loadData >> loop) (ProgramState renderer mempty mempty def)
+  execStateT (loadData >> loop) (initProgramState renderer)
 
   cleanSDL window renderer
 

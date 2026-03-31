@@ -14,6 +14,7 @@
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiWayIf        #-}
 
 module Main where
 
@@ -71,33 +72,34 @@ loadData = loadFonts >> loadMenuTextures
 -- | Dispatcher d'événements : route vers le module approprié selon l'état
 handleEventPayload :: SDL.EventPayload -> StateT ProgramState IO ()
 handleEventPayload payload = do
-  isOpen <- use (menuSt . menuOpen)
-  if isOpen
-    then MainMenu.event payload
-    else do
-      -- Quand le menu est fermé, gérer les inputs de gameplay
-      -- TODO: déléguer vers un futur GameView.event
-      case payload of
-        SDL.KeyboardEvent ke
-          | SDL.keyboardEventKeyMotion ke == SDL.Pressed ->
-              let keycode = SDL.keysymKeycode (SDL.keyboardEventKeysym ke)
-              in case keycode of
-                SDL.KeycodeEscape -> menuSt . menuOpen .= True
-                _                 -> keyboardState . pressedKeys %= Set.insert keycode
-          | SDL.keyboardEventKeyMotion ke == SDL.Released ->
-              keyboardState . pressedKeys %= Set.delete (SDL.keysymKeycode (SDL.keyboardEventKeysym ke))
-          | otherwise -> return ()
-        _ -> return ()
+  isMenuOpen <- use (menuSt . menuOpen)
+  if | isMenuOpen -> MainMenu.event payload
+     -- TODO: ajouter ici les futures branches (ex: GameView.event)
+     | otherwise  -> do
+         -- Quand le menu est fermé, gérer les inputs de gameplay
+         -- TODO: déléguer vers un futur GameView.event
+         case payload of
+           SDL.KeyboardEvent ke
+             | SDL.keyboardEventKeyMotion ke == SDL.Pressed ->
+                 let keycode = SDL.keysymKeycode (SDL.keyboardEventKeysym ke)
+                 in case keycode of
+                   SDL.KeycodeEscape -> menuSt . menuOpen .= True
+                   _                 -> keyboardState . pressedKeys %= Set.insert keycode
+             | SDL.keyboardEventKeyMotion ke == SDL.Released ->
+                 keyboardState . pressedKeys %= Set.delete (SDL.keysymKeycode (SDL.keyboardEventKeysym ke))
+             | otherwise -> return ()
+           _ -> return ()
 
 continueLoop :: StateT ProgramState IO Bool
 continueLoop = do
-  isOpen <- use (menuSt . menuOpen)
-  if isOpen then return True  -- Le menu est ouvert, on continue la boucle
-            else do
-              keys <- use (keyboardState . pressedKeys)
-              idx  <- use (menuSt . menuOption)
-              -- Quitter si Q est pressé ou si QuitGame a été sélectionné
-              return $ not (Set.member SDL.KeycodeQ keys) && menuActions idx /= QuitGame
+  isMenuOpen <- use (menuSt . menuOpen)
+  if | isMenuOpen -> return True  -- Le menu est ouvert, on continue la boucle
+     -- TODO: ajouter ici les futures branches
+     | otherwise  -> do
+         keys <- use (keyboardState . pressedKeys)
+         idx  <- use (menuSt . menuOption)
+         -- Quitter si Q est pressé ou si QuitGame a été sélectionné
+         return $ not (Set.member SDL.KeycodeQ keys) && menuActions idx /= QuitGame
 
 loop :: StateT ProgramState IO ()
 loop = whileM $ do
@@ -106,16 +108,16 @@ loop = whileM $ do
   events <- SDL.pollEvents
   forM_ events (handleEventPayload . SDL.eventPayload)
 
-  isOpen <- use (menuSt . menuOpen)
+  isMenuOpen <- use (menuSt . menuOpen)
 
   -- Dispatcher de rendu : route vers le module approprié
-  if isOpen
-    then MainMenu.render
-    else do
-      -- Rendu gameplay normal
-      -- TODO: déléguer vers un futur GameView.render
-      SDL.rendererDrawColor renderer SDL.$= SDL.V4 0 0 0 255
-      SDL.clear renderer
+  if | isMenuOpen -> MainMenu.render
+     -- TODO: ajouter ici les futures branches (ex: GameView.render)
+     | otherwise  -> do
+         -- Rendu gameplay normal
+         -- TODO: déléguer vers un futur GameView.render
+         SDL.rendererDrawColor renderer SDL.$= SDL.V4 0 0 0 255
+         SDL.clear renderer
 
   SDL.present renderer
   liftIO $ threadDelay (1000000 `div` 60)

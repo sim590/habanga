@@ -8,6 +8,9 @@ dist
 dist-newstyle
 .ghc.environment.*
 
+# Krita
+*.kra~
+
 # Binary files
 *.o
 *.obj

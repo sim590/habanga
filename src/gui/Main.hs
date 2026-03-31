@@ -8,6 +8,9 @@
   Maintainer  : sim.desaulniers@gmail.com
 
   Point d'entrée de l'interface graphique SDL du jeu Habanga.
+  Ce module est un pur dispatcher : il route les événements et le rendu
+  vers les sous-modules appropriés (MainMenu, futur GameView, etc.)
+  selon l'état courant du programme.
 -}
 
 {-# LANGUAGE OverloadedStrings #-}
@@ -18,8 +21,6 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Data.Map as Map
 
-import Foreign.C.Types (CInt)
-
 import Control.Monad.Extra ( whileM )
 import Control.Concurrent
 import Control.Monad.State
@@ -27,6 +28,7 @@ import Control.Lens
 
 import ProgramState
 import MenuState
+import qualified MainMenu
 import Textures.Menu (loadMenuTextures)
 
 import System.Environment
@@ -66,48 +68,15 @@ loadFonts = do
 loadData :: StateT ProgramState IO ()
 loadData = loadFonts >> loadMenuTextures
 
--- | Gestion de l'input du menu à partir d'un événement SDL
-handleMenuEvent :: SDL.EventPayload -> StateT ProgramState IO ()
-handleMenuEvent (SDL.KeyboardEvent ke)
-  | SDL.keyboardEventKeyMotion ke == SDL.Pressed = do
-      isOpen <- use (menuSt . menuOpen)
-      let keycode = SDL.keysymKeycode (SDL.keyboardEventKeysym ke)
-      when isOpen $ case keycode of
-        SDL.KeycodeW     -> menuSt . menuOption %= \n -> (n - 1 + menuCount) `mod` menuCount
-        SDL.KeycodeUp    -> menuSt . menuOption %= \n -> (n - 1 + menuCount) `mod` menuCount
-        SDL.KeycodeS     -> menuSt . menuOption %= \n -> (n + 1) `mod` menuCount
-        SDL.KeycodeDown  -> menuSt . menuOption %= \n -> (n + 1) `mod` menuCount
-        SDL.KeycodeSpace -> do
-          idx <- use (menuSt . menuOption)
-          handleMenuAction (menuActions idx)
-        SDL.KeycodeReturn -> do
-          idx <- use (menuSt . menuOption)
-          handleMenuAction (menuActions idx)
-        _                 -> return ()
-  | otherwise = return ()
-handleMenuEvent (SDL.MouseButtonEvent mbe)
-  | SDL.mouseButtonEventMotion mbe == SDL.Pressed
-  , SDL.mouseButtonEventButton mbe == SDL.ButtonLeft = do
-      isOpen <- use (menuSt . menuOpen)
-      -- TODO: implémenter la détection du clic sur un item du menu
-      --       (nécessite de connaître les coordonnées de chaque item)
-      when isOpen $ return ()
-handleMenuEvent _ = return ()
-
--- | Exécuter l'action correspondant à l'option du menu sélectionnée
-handleMenuAction :: MenuAction -> StateT ProgramState IO ()
-handleMenuAction NewGame  = menuSt . menuOpen .= False -- TODO: démarrer une nouvelle partie
-handleMenuAction Continue = menuSt . menuOpen .= False -- TODO: continuer la partie en cours
-handleMenuAction Options  = return ()                  -- TODO: ouvrir le sous-menu d'options
-handleMenuAction QuitGame = menuSt . menuOpen .= False -- Sera capté par continueLoop
-
+-- | Dispatcher d'événements : route vers le module approprié selon l'état
 handleEventPayload :: SDL.EventPayload -> StateT ProgramState IO ()
 handleEventPayload payload = do
   isOpen <- use (menuSt . menuOpen)
   if isOpen
-    then handleMenuEvent payload
+    then MainMenu.event payload
     else do
       -- Quand le menu est fermé, gérer les inputs de gameplay
+      -- TODO: déléguer vers un futur GameView.event
       case payload of
         SDL.KeyboardEvent ke
           | SDL.keyboardEventKeyMotion ke == SDL.Pressed ->
@@ -130,44 +99,6 @@ continueLoop = do
               -- Quitter si Q est pressé ou si QuitGame a été sélectionné
               return $ not (Set.member SDL.KeycodeQ keys) && menuActions idx /= QuitGame
 
--- | Dessiner une texture centrée horizontalement à une position Y donnée
-drawCentered :: SDL.Renderer -> SDL.Texture -> CInt -> CInt -> StateT ProgramState IO ()
-drawCentered renderer tex screenW y = do
-  info <- SDL.queryTexture tex
-  let w = SDL.textureWidth info
-      h = SDL.textureHeight info
-      x = (screenW - w) `div` 2
-  SDL.copy renderer tex Nothing (Just $ SDL.Rectangle (SDL.P (SDL.V2 x y)) (SDL.V2 w h))
-
--- | Rendu du menu
-renderMenu :: StateT ProgramState IO ()
-renderMenu = do
-  renderer    <- use sdlRenderer
-  selectedIdx <- use (menuSt . menuOption)
-  textures    <- use textureMap
-
-  -- Fond d'écran
-  case Map.lookup "menu-bg" textures of
-    Just bgTex -> SDL.copy renderer bgTex Nothing Nothing
-    Nothing    -> do
-      SDL.rendererDrawColor renderer SDL.$= SDL.V4 35 35 50 255
-      SDL.clear renderer
-
-  -- Titre centré en haut
-  case Map.lookup "menu-title" textures of
-    Just titleTex -> drawCentered renderer titleTex 1280 120
-    Nothing       -> return ()
-
-  -- Options du menu
-  forM_ (zip [0..] menuTexts) $ \(i, _) -> do
-    let key = if i == selectedIdx
-              then "menu-sel-" <> show i
-              else "menu-"     <> show i
-        y   = 300 + fromIntegral i * 80
-    case Map.lookup key textures of
-      Just tex -> drawCentered renderer tex 1280 y
-      Nothing  -> return ()
-
 loop :: StateT ProgramState IO ()
 loop = whileM $ do
   renderer <- use sdlRenderer
@@ -177,13 +108,14 @@ loop = whileM $ do
 
   isOpen <- use (menuSt . menuOpen)
 
+  -- Dispatcher de rendu : route vers le module approprié
   if isOpen
-    then renderMenu
+    then MainMenu.render
     else do
       -- Rendu gameplay normal
+      -- TODO: déléguer vers un futur GameView.render
       SDL.rendererDrawColor renderer SDL.$= SDL.V4 0 0 0 255
       SDL.clear renderer
-      -- TODO: rendu du gameplay
 
   SDL.present renderer
   liftIO $ threadDelay (1000000 `div` 60)
@@ -203,3 +135,4 @@ main = do
   cleanSDL window renderer
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
+

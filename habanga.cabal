@@ -108,12 +108,16 @@ executable habanga-tui
 executable habanga-gui
     import:             common-base,
                         common-lang,
-                        common-exe,
+                        common-exe
     main-is:            Main.hs
+    other-modules:      MenuState
     build-depends:      habanga-core,
                         opendht-hs,
                         sdl2,
                         sdl2-ttf,
+                        sdl2-image,
+                        file-embed ^>= 0.0.16,
+                        bytestring,
                         text
     hs-source-dirs:     src/gui
 

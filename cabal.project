@@ -1,1 +1,3 @@
 packages: ., deps/opendht-hs/
+
+ghc-options: -fno-code-erased

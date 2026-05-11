@@ -1,0 +1,30 @@
+Prompts pour la génération de cartes-dos — Habanga
+====================================================
+À coller dans le nœud CLIPTextEncode de l'interface ComfyUI.
+La bordure blanche arrondie est ajoutée par Pillow après sélection —
+l'IA génère uniquement le contenu plein cadre (fond + masque).
+
+
+BLEU
+----
+african tribal ceremonial mask centered on solid blue background, full bleed illustration filling entire image edge to edge, flat graphic illustration style, bold flat solid colors, no gradients, blue background with subtle embossed geometric tribal texture pattern, blue painted wooden ceremonial mask with colorful decorative feathers on top, circular forehead ornament, flat clean white sticker border around mask only, no shadow, no drop shadow, no dark outline, no black border, no glow, pure white flat border only, no card border, no card frame, no white card outline, clean vector art, vibrant saturated colors
+
+
+YELLOW
+------
+african tribal ceremonial mask centered on solid yellow background, full bleed illustration filling entire image edge to edge, flat graphic illustration style, bold flat solid colors, no gradients, yellow background with subtle embossed geometric tribal texture pattern, yellow orange painted wooden ceremonial mask with red feathers on sides, elongated oval face, flat clean white sticker border around mask only, no shadow, no drop shadow, no dark outline, no black border, no glow, pure white flat border only, no card border, no card frame, no white card outline, clean vector art, vibrant saturated colors
+
+
+ORANGE
+------
+african tribal ceremonial mask centered on solid orange background, full bleed illustration filling entire image edge to edge, flat graphic illustration style, bold flat solid colors, no gradients, orange background with subtle embossed geometric tribal texture pattern, yellow orange painted wooden ceremonial mask with red feathers on sides, elongated oval face, flat clean white sticker border around mask only, no shadow, no drop shadow, no dark outline, no black border, no glow, pure white flat border only, no card border, no card frame, no white card outline, clean vector art, vibrant saturated colors
+
+
+VIOLET
+------
+african tribal ceremonial mask centered on solid purple background, full bleed illustration filling entire image edge to edge, flat graphic illustration style, bold flat solid colors, no gradients, purple violet background with clearly visible embossed geometric tribal texture pattern, angular spirals maze labyrinths zigzag circles motifs throughout entire background, purple painted wooden ceremonial mask with horns, red dot accents, orange tongue, flat clean white sticker border around mask only, no shadow, no drop shadow, no dark outline, no black border, no glow, pure white flat border only, no card border, no card frame, no white card outline, clean vector art, vibrant saturated colors
+
+
+ROUGE
+-----
+african tribal ceremonial mask centered on solid red background, full bleed illustration filling entire image edge to edge, flat graphic illustration style, bold flat solid colors, no gradients, red background with subtle embossed geometric tribal texture pattern, red orange painted wooden ceremonial mask with colorful feathers on sides, white dot decorations, smiling expression, flat clean white sticker border around mask only, no shadow, no drop shadow, no dark outline, no black border, no glow, pure white flat border only, no card border, no card frame, no white card outline, clean vector art, vibrant saturated colors

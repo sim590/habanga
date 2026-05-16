@@ -56,6 +56,9 @@ import qualified OnlineGame
 import ProgramState
 import qualified BrickNetworkBridge as BNB
 
+import I18n
+import I18n.Types
+
 colorAttrFromCard :: Card -> Bool -> AttrName
 colorAttrFromCard c selected
   | selected = case c^.color of
@@ -99,18 +102,18 @@ goBackOrQuit = do
 
 playCard :: Either Card Card -> T.EventM AppFocus ProgramState ()
 playCard sidedCard = do
+  t <- use translations
   thePlayers <- use (gameState . players)
   let
     currentPlayer = head thePlayers
-    cardColorStr  = Text.unpack $ Text.toLower $ Text.pack $ maybe "gris" show (card^.color)
+    cardColorStr  = displayColor t (card^.color)
     card          = fromEither sidedCard
 
   cardsDrawn <- runMaybeT $ Game.processPlayerTurnAction sidedCard
 
   let
-    cardsDrawnLog = [">> " <> "pige " <> show (cardsDrawn^?!_Just) <> " carte(s)!" | ((>0) <$> cardsDrawn) == Just True]
-    playerLog     = unlines $ [ "Joueur " <> currentPlayer^.name <> ": "
-                              , ">> "     <> "a joué le " <> show (card^.value) <> " " <> cardColorStr <> "."
+    cardsDrawnLog = [logDrewCards t (cardsDrawn^?!_Just) | ((>0) <$> cardsDrawn) == Just True]
+    playerLog     = unlines $ [ logPlayedCard t (currentPlayer^.name) (show (card^.value)) cardColorStr 
                               ] <> cardsDrawnLog
                                 <> ["\n"]
   gameViewState . gameLog %= (:) playerLog
@@ -141,7 +144,7 @@ playMyTurn side = use networkState >>= \ ns -> whenIsLocalPlayerTurn ns $ do
 event :: T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
 event (T.AppEvent (BNB.NetworkBrickUpdate ns)) = do
   reqChan <- use networkRequestChannel
-  turns <- OnlineGame.consumeConsecutivePlayerTurns ns (reqChan ^?! _Just)
+  turns   <- OnlineGame.consumeConsecutivePlayerTurns ns (reqChan ^?! _Just)
   forM_ turns $ \ (_, card) -> playCard card
   networkState .= ns
 event ev = do
@@ -166,9 +169,10 @@ event ev = do
 winnerDialog :: ProgramState -> [Widget AppFocus]
 winnerDialog ps =
   let
-    msg w = fill ' ' <+> str (w <> " a gagné!") <+> fill ' '
+    t     = ps ^. translations
+    msg w = fill ' ' <+> str (w <> msgWon t) <+> fill ' '
    in case ps^.gameViewState.winner of
-        Just winnerName -> [ C.centerLayer $ B.borderWithLabel (str "Fin de partie!")
+        Just winnerName -> [ C.centerLayer $ B.borderWithLabel (str (titleGameOver t))
                                            $ popUpWidgetDimensions
                                            $ vBox [ fill ' ', msg winnerName, fill ' ' ]
                            ]
@@ -180,24 +184,26 @@ otherPlayerTurnWidget ps
   | not (OnlineGame.isMyTurn ns) = [ C.centerLayer $ B.borderWithLabel popUpTitle $ popUpWidgetDimensions $ vBox [ fill ' ', msg, fill ' ' ] ]
   | otherwise                    = []
     where
+      t             = ps ^. translations
       ns            = ps ^. networkState
-      popUpTitle    = str $ "Tour de " <> currentPlayer ^. name
-      msg           = C.center $ str "Veuillez patientez..."
+      popUpTitle    = str $ playersTurn t (currentPlayer ^. name)
+      msg           = C.center $ str (msgPleaseWait t)
       currentPlayer = head $ ps ^. gameState . players
 
 widget :: ProgramState -> [Widget AppFocus]
 widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> gameUI
   where
+    t                  = ps ^. translations
     ns                 = ps ^. networkState
     players'           = ps ^. gameState . players
-    gameUI             = [ vBox [ C.hCenter $ str $ "Joueur: " <> currentPlayer ^. name <> ", Tour: " <> show (ns ^. NS.turnNumber)
+    gameUI             = [ vBox [ C.hCenter $ str $ labelPlayer t <> currentPlayer ^. name <> labelTurn t <> show (ns ^. NS.turnNumber)
                                 , C.hCenter $ hBox $ playerCardsButtons currentCardsInHand
                                 , C.center (vBox $ map hBox cardsOnTableMatrix)
-                                , C.hCenter $ B.borderWithLabel (str "Touches") $ vLimit (length keyBindText) keybindBox
+                                , C.hCenter $ B.borderWithLabel (str (titleKeyBindings t)) $ vLimit (length keyBindText) keybindBox
                                 ]
                          ]
     gameLogTextWidget  = vBox $ map str $ ps^.gameViewState.gameLog
-    gameLogWidget      = translateBy (T.Location (1, 10)) $ B.borderWithLabel (str "Journal du jeu")
+    gameLogWidget      = translateBy (T.Location (1, 10)) $ B.borderWithLabel (str $ gameLogTitle t)
                                                           $ vLimit 15
                                                           $ hLimit 30
                                                           $ viewport (Game (Just GameLog)) T.Vertical gameLogTextWidget
@@ -205,10 +211,10 @@ widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> ga
                               $ over (traverse.ix 0) (\ w ->  padLeft (Pad 2) w <+> fill ' ')
                               $ over (traverse.ix 1) (\ w -> w <+> fill ' ')
                               $ over (traverse.traverse) str keyBindText
-    keyBindText        = [ ["gauche/droite", "Sélectionner une carte"]
-                         , ["(z)",           "Jouer à gauche"        ]
-                         , ["(c)",           "Jouer à droite"        ]
-                         , ["(q)",           "Quitter"               ]
+    keyBindText        = [ [kbLeftRight t, kbSelectCard t] 
+                         , ["(z)"        , kbPlayLeft t  ]
+                         , ["(c)"        , kbPlayRight t ]
+                         , ["(q)"        , kbQuit t      ]
                          ]
     btn i c            = button (show $ c^.value) i 15 (ps^.gameViewState.gameViewIndex) (colorAttrFromCard c True)
     playerCardsButtons = zipWith (\ i c -> C.hCenter $ withAttr (colorAttrFromCard c False) $ btn i c) [0..]

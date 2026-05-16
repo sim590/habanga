@@ -43,6 +43,10 @@ import qualified MainMenu
 import qualified GameView
 import qualified BrickNetworkBridge as BNB
 
+import System.Environment (lookupEnv)
+import Data.List (isPrefixOf)
+import I18n
+
 appEvent :: BrickEvent AppFocus BNB.NetworkBrickEvent -> EventM AppFocus ProgramState ()
 appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of
   Just (MainMenu _) -> MainMenu.event e
@@ -86,8 +90,11 @@ app = M.App { M.appDraw         = drawUI
                  , M.appAttrMap      = const attrsMap
                  }
 
+
 main :: IO ()
 main = do
+  envMLang <- lookupEnv "LANG"
+  let l = languageFromString envMLang
   netReqChan <- liftIO newTChanIO
   brickchan  <- liftIO $ newBChan 10
 
@@ -95,6 +102,7 @@ main = do
   initialVty        <- buildVty
   finalProgramState <- M.customMain initialVty buildVty (Just brickchan) app $ def { _brickEventChannel     = Just brickchan
                                                                                    , _networkRequestChannel = Just netReqChan
+                                                                                   , _translations          = getTranslations l
                                                                                    }
 
   atomically $ writeTChan netReqChan Shutdown

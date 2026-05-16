@@ -68,9 +68,9 @@ handleAction QuitGame = menuSt . menuOpen .= False -- Sera capté par continueLo
 -- | Rendu du menu principal
 render :: StateT ProgramState IO ()
 render = do
-  renderer    <- use sdlRenderer
-  selectedIdx <- use (menuSt . menuOption)
-  textures    <- use textureMap
+  Just renderer <- use sdlRenderer
+  selectedIdx   <- use (menuSt . menuOption)
+  textures      <- use textureMap
 
   -- Fond d'écran
   case Map.lookup "menu-bg" textures of

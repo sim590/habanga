@@ -103,7 +103,7 @@ continueLoop = do
 
 loop :: StateT ProgramState IO ()
 loop = whileM $ do
-  renderer <- use sdlRenderer
+  Just renderer <- use sdlRenderer
 
   events <- SDL.pollEvents
   forM_ events (handleEventPayload . SDL.eventPayload)

@@ -19,8 +19,6 @@ module Textures.Menu
 
 import qualified Data.Map as Map
 import qualified Data.Text as T
-import qualified Data.ByteString as BS
-import Data.FileEmbed (embedFile, makeRelativeToProject)
 
 import Control.Monad.State
 import Control.Lens
@@ -32,20 +30,17 @@ import ProgramState
 import MenuState
 import Textures (loadEmbeddedPNG)
 
--- | Image de fond du menu, imbriquée dans le binaire à la compilation
-bgImageData :: BS.ByteString
-bgImageData = $(makeRelativeToProject "resources/habanga-gui/fond-ecran.png" >>= embedFile)
-
 -- | Charger les textures du menu principal
 loadMenuTextures :: StateT ProgramState IO ()
 loadMenuTextures = do
   let white  = SDL.V4 255 255 255 255
       yellow = SDL.V4 255 220 0   255
-  renderer <- use sdlRenderer
+  Just renderer <- use sdlRenderer
   fonts    <- use fontMap
+  imgData  <- use (programResources . bgImageData)
   let font = fonts Map.! "default"
-  -- Fond d'écran du menu (imbriqué dans le binaire)
-  bgTex <- liftIO $ loadEmbeddedPNG renderer bgImageData
+  -- Fond d'écran du menu (imbriqué dans le binaire via ProgramResources)
+  bgTex <- liftIO $ loadEmbeddedPNG renderer imgData
   textureMap %= Map.insert "menu-bg" bgTex
   -- Titre
   titleSurf <- SDLF.solid font (SDL.V4 255 180 0 255) (T.pack "HABANGA")

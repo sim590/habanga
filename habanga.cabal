@@ -70,6 +70,10 @@ library habanga-core
                         NetworkState
                         Network
                         Random
+                        I18n
+                        I18n.Types
+                        I18n.Fr
+                        I18n.En
     build-depends:      random     ^>= 1.2.1,
                         opendht-hs ^>= 0.1.0,
                         serialise  ^>= 0.2.6,

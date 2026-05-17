@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   build:
@@ -17,7 +18,7 @@ jobs:
       image: ghcr.io/sim590/habanga-ci
       credentials:
         username: sim590
-        password: ${{ secrets.DOCKER_CONTAINER_REGISTRY_TOKEN }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
     - uses: actions/checkout@v4
       with:

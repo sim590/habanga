@@ -1,0 +1,5 @@
+#!/bin/sh
+command -v git-lfs >/dev/null 2>&1 || { printf >&2 "\n%s\n\n" \
+  "Ce dépôt utilise Git LFS mais 'git-lfs' est introuvable dans le PATH. \
+Si vous ne souhaitez plus utiliser Git LFS, supprimez ce fichier."; exit 2; }
+git lfs post-commit "$@"

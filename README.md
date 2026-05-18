@@ -2,11 +2,11 @@
 
 ## Mise en place
 
-Après avoir cloné le dépôt, activer les hameçons git :
+Après avoir cloné le dépôt, activer les scripts d'ancrage git :
 
 ```sh
 git config core.hooksPath .githooks
 ```
 
-Les hameçons gèrent Git LFS et vérifient que les objets LFS sont bien
+Les scripts d'ancrage gèrent Git LFS et vérifient que les objets LFS sont bien
 envoyés vers le serveur configuré dans `.lfsconfig`.

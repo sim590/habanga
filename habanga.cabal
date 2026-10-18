@@ -82,7 +82,6 @@ executable habanga-node
                         common-exe,
                         brick
     main-is:            Main.hs
-    other-modules:      Node
     build-depends:      habanga-core,
                         random
     hs-source-dirs:     src/tools/node

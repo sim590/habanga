@@ -10,12 +10,12 @@
 
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Main where
 
 import Data.Default
 import Data.Maybe
-import qualified Data.Map as Map
 
 import Text.Read
 
@@ -63,7 +63,8 @@ data NodeState = NodeState { _focusRing                 :: F.FocusRing AppFocus
                            , _inputEditor               :: E.Editor String AppFocus
                            , _logText                   :: [String]
                            , _gameState                 :: GameState
-                           , _nodeNetworkState          :: TVar NetworkState
+                           , _networkState              :: NetworkState
+                           , _nodeNetworkUpdateChannel  :: TChan NetworkChannelUpdate
                            , _nodeNetworkRequestChannel :: TChan NetworkRequest
                            }
 makeLenses ''NodeState
@@ -81,8 +82,12 @@ executeCmd :: EventM AppFocus NodeState ()
 executeCmd = do
   ie      <- use inputEditor
   gs      <- use gameState
-  nsTV    <- use nodeNetworkState
+  netChan <- use nodeNetworkUpdateChannel
   reqChan <- use nodeNetworkRequestChannel
+  liftIO (atomically $ tryReadTChan netChan) >>= \ case
+    Just (NetworkChannelUpdate netState) -> networkState .= netState
+    Nothing                              -> return ()
+  netState <- use networkState
   let
     cmdline      = head $ E.getEditContents ie
     cmdlineToks  = words cmdline
@@ -100,7 +105,6 @@ executeCmd = do
       [gc, playerName] -> liftIO $ atomically $ writeTChan reqChan $ JoinGame gc playerName
       _                -> logInvalidParameter
     startGame = do
-      netState <- liftIO $ readTVarIO nsTV
       let
         shuffPNames = OnlineGame.shuffledPlayerNames netState gen
         gen         = OnlineGame.randomGeneratorFromNetworkState netState
@@ -133,20 +137,18 @@ executeCmd = do
               Nothing -> logText %= (<>["err.. Impossible de jouer cette carte!"])
           _ -> logInvalidParameter
       _ -> logInvalidParameter
-    processOtherPlayerTurn = liftIO (readTVarIO nsTV) >>= \ netState -> do
+    processOtherPlayerTurn = do
       let
         consecutivePlayerTurns' = consecutivePlayerTurns netState (netState ^. gameTurns)
       case consecutivePlayerTurns' of
-        ((n, ec):_) -> do
+        ((_, ec):_) -> do
           gs' <- flip execStateT gs $ do
             runMaybeT $ processPlayerTurnAction ec
           gameState .= gs'
-          liftIO $ atomically $ modifyTVar nsTV $ \ ns -> ns & gameTurns  %~ Map.delete n
-                                                             & turnNumber +~ 1
+          liftIO $ atomically $ writeTChan reqChan $ UpdateTurnNumber $ netState ^. turnNumber + 1
         _ -> logText %= (<>["err.. Aucun tour à traiter!"])
     resetNetwork = liftIO $ atomically $ writeTChan reqChan ResetNetwork
     printGameState = do
-      netState <- liftIO $ readTVarIO nsTV
       logText %= (<> lines (show gs))
       logText %= (<> lines (show netState))
     exec
@@ -273,7 +275,6 @@ myForkIO io = do
 
 main :: IO ()
 main = do
-  nsTV    <- liftIO (newTVarIO def)
   reqChan <- newTChanIO
   netChan <- newTChanIO
   mv      <- myForkIO $ Network.loop def (NetworkTwoWayChannel reqChan netChan)
@@ -281,10 +282,11 @@ main = do
                                        , _inputEditor               = E.editor Input Nothing ""
                                        , _logText                   = []
                                        , _gameState                 = def
-                                       , _nodeNetworkState          = nsTV
+                                       , _networkState              = def
+                                       , _nodeNetworkUpdateChannel  = netChan
                                        , _nodeNetworkRequestChannel = reqChan
                                        }
-  atomically $ modifyTVar nsTV $ status .~ ShuttingDown
+  atomically $ writeTChan reqChan Shutdown
   readMVar mv
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :

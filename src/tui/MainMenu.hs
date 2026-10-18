@@ -128,7 +128,7 @@ event (T.AppEvent (BNB.NetworkBrickUpdate ns)) = networkState .= ns >> do
       mainMenuState.submenu .= Nothing
     _ -> return ()
 event ev = do
-  t <- use translations
+  t <- use (translations.mainMenuTranslations)
   let
     buttonMenuEvents :: MenuButtonActionPairList -> Traversal' ProgramState Int -> T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
     buttonMenuEvents menuButtons menuIndexLens (T.VtyEvent (V.EvKey V.KEnter      [])) = selectEntry menuButtons menuIndexLens
@@ -188,7 +188,6 @@ event ev = do
     onlineLobbyEvents (T.VtyEvent (V.EvKey (V.KChar 'q') [])) = use networkRequestChannel >>= OnlineGame.resetNetwork >> goBackOrQuit
     onlineLobbyEvents _                                       = return ()
 
-  t <- use translations
   use (mainMenuState.submenu) >>= \ case
     Just s@(GameInitialization _)         -> formEvents s ev
     Just s@(OnlineGameInitialization _ _) -> formEvents s ev
@@ -196,11 +195,11 @@ event ev = do
     Just (OnlineLobby _)                  -> onlineLobbyEvents ev
     _                                     -> buttonMenuEvents (mainMenuButtons t) (mainMenuState.mainMenuIndex) ev
 
-mainMenuButtons :: Translations -> MenuButtonActionPairList
-mainMenuButtons t = [ (button (btnPlay t),       gameInitializationFormAction)
-                    , (button (btnOnlinePlay t), onlineGameMenuAction        )
-                    , (button (btnOptions t),    return ()                   )
-                    , (button (btnQuit t),       M.halt                      )
+mainMenuButtons :: MainMenuTranslations -> MenuButtonActionPairList
+mainMenuButtons t = [ (button (_btnPlay t),       gameInitializationFormAction)
+                    , (button (_btnOnlinePlay t), onlineGameMenuAction        )
+                    , (button (_btnOptions t),    return ()                   )
+                    , (button (_btnQuit t),       M.halt                      )
                     ]
   where
     gameInitializationFormAction = do
@@ -210,10 +209,10 @@ mainMenuButtons t = [ (button (btnPlay t),       gameInitializationFormAction)
       mainMenuState.submenu .= Just (OnlineGameSubMenu 0)
       currentFocus          %= focusSetCurrent OnlineGameMenu
 
-onlineGameMenuButtons :: Translations -> MenuButtonActionPairList
-onlineGameMenuButtons t = [ (button (btnCreateGame t), onlineGameCreationAction)
-                          , (button (btnJoinGame t),   onlineGameJoinAction    )
-                          , (button (btnCancel t),     goBackOrQuit            )
+onlineGameMenuButtons :: MainMenuTranslations -> MenuButtonActionPairList
+onlineGameMenuButtons t = [ (button (_btnCreateGame t), onlineGameCreationAction)
+                          , (button (_btnJoinGame t),   onlineGameJoinAction    )
+                          , (button (_btnCancel t),     goBackOrQuit            )
                           ]
   where
     onlineGameCreationAction = do
@@ -226,33 +225,34 @@ onlineGameMenuButtons t = [ (button (btnCreateGame t), onlineGameCreationAction)
 titleWidth :: ProgramState -> Int
 titleWidth ps = length $ head $ lines (ps^.programResources.menuGameTitle)
 
-mkGameInitializationForm :: Translations -> GameInitializationInfo -> Form GameInitializationInfo e AppFocus
+mkGameInitializationForm :: MainMenuTranslations -> GameInitializationInfo -> Form GameInitializationInfo e AppFocus
 mkGameInitializationForm t =
     let label s w    = padLeft (Pad 1) $ padBottom (Pad 1) $ vLimit 2 (hLimit 20 $ str s <+> fill ' ') <+> w
         mMaxNumNames = Just _HABANGA_MAX_PLAYER_COUNT_
         focusedItem  = MainMenu (GameInitializationForm GameInitializationFormPlayerNamesField)
-    in newForm [ label (lblPlayerNames t) @@= B.border
+    in newForm [ label (_lblPlayerNames t) @@= B.border
                                           @@= editTextField playerNamesField focusedItem mMaxNumNames
                ]
 
-mkOnlineGameInitializationForm :: Translations -> OnlineRole -> OnlineGameInitializationInfo -> Form OnlineGameInitializationInfo e AppFocus
+mkOnlineGameInitializationForm :: MainMenuTranslations -> OnlineRole -> OnlineGameInitializationInfo -> Form OnlineGameInitializationInfo e AppFocus
 mkOnlineGameInitializationForm t pRole =
   let label s w             = padLeft (Pad 1) $ padBottom (Pad 1) $ vLimit 2 (hLimit 25 $ str s <+> fill ' ') <+> w
       myNameField           = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormMyNameField)
       numberOfPlayersField  = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormNumberOfPlayersField)
       gameCodeField         = MainMenu (OnlineGameInitializationForm OnlineGameInitializationFormGameCodeField)
-      playerNameLine        = [ label (lblYourName t)   @@= editTextField myPlayerName myNameField (Just 1)        ]
-      formLines Host        = [ label (lblNumPlayers t) @@= editShowableField numberOfPlayers numberOfPlayersField ]
-      formLines OtherPlayer = [ label (lblGameCode t)   @@= editTextField gameCode gameCodeField  (Just 1)         ]
+      playerNameLine        = [ label (_lblYourName t)   @@= editTextField myPlayerName myNameField (Just 1)        ]
+      formLines Host        = [ label (_lblNumPlayers t) @@= editShowableField numberOfPlayers numberOfPlayersField ]
+      formLines OtherPlayer = [ label (_lblGameCode t)   @@= editTextField gameCode gameCodeField  (Just 1)         ]
    in newForm $ playerNameLine <> formLines pRole
 
 gameInitializationSubMenu :: ProgramState -> [Widget AppFocus]
 gameInitializationSubMenu ps =
   let
-    t             = ps ^. translations
-    submenuWidget = B.borderWithLabel (str (titleGameConfig t)) $ hLimit (titleWidth ps + 4) $ vLimit 25 $ vBox contentWidget
+    mt            = ps ^. (translations.mainMenuTranslations)
+    gt            = ps ^. (translations.gameViewTranslations)
+    submenuWidget = B.borderWithLabel (str (_titleGameConfig mt)) $ hLimit (titleWidth ps + 4) $ vLimit 25 $ vBox contentWidget
     contentWidget = [ renderForm ((ps ^. mainMenuState . submenu) ^?! _Just . gameForm)
-                    , C.hCenter $ str (msgValidate t)
+                    , C.hCenter $ str (_msgValidate gt)
                     ]
   in case ps^.mainMenuState.submenu of
     Just (GameInitialization _)       -> [C.centerLayer submenuWidget]
@@ -261,11 +261,12 @@ gameInitializationSubMenu ps =
 onlineGameInitializationSubMenu :: ProgramState -> [Widget AppFocus]
 onlineGameInitializationSubMenu ps =
   let
-    t              = ps ^. translations
-    windowTitleStr = str (titleOnlineConfig t)
+    mt             = ps ^. (translations.mainMenuTranslations)
+    gt             = ps ^. (translations.gameViewTranslations)
+    windowTitleStr = str (_titleOnlineConfig mt)
     submenuWidget  = B.borderWithLabel windowTitleStr $ hLimit (titleWidth ps + 4) $ vLimit 25 $ vBox contentWidget
     contentWidget  = [ renderForm ((ps ^. mainMenuState . submenu) ^?! _Just . onlineGameForm)
-                     , C.hCenter $ str (msgValidate t)
+                     , C.hCenter $ str (_msgValidate gt)
                      ]
    in case ps ^. mainMenuState . submenu of
      Just (OnlineGameInitialization _ _) -> [C.centerLayer submenuWidget]
@@ -274,8 +275,8 @@ onlineGameInitializationSubMenu ps =
 onlineGameSubMenu :: ProgramState -> [Widget AppFocus]
 onlineGameSubMenu ps =
   let
-    t              = ps ^. translations
-    windowTitleStr = str (titleOnlineGame t)
+    t              = ps ^. (translations.mainMenuTranslations)
+    windowTitleStr = str (_titleOnlineGame t)
     submenuWidget  = B.borderWithLabel windowTitleStr $ hLimit (titleWidth ps + 4) $ vLimit 25 $ vBox contentWidget
     contentWidget  = [buttonMenu (onlineGameMenuButtons t) (mainMenuState.submenu._Just.onlineGameMenuIndex) ps]
    in case ps ^. mainMenuState . submenu of
@@ -285,16 +286,16 @@ onlineGameSubMenu ps =
 onlineLobby :: ProgramState -> [Widget AppFocus]
 onlineLobby ps =
   let
-    t                        = ps ^. translations
+    t                        = ps ^. (translations.gameViewTranslations)
     numberOfPlayersConnected = length $ ps ^. networkState . NS.playersIdentities
     expectedNumberOfPlayers  = ps ^. networkState . NS.gameSettings . NS.numberOfPlayers
     gc                       = ps ^. networkState . NS.gameSettings . NS.gameCode
-    windowTitleStr Host      = str $ msgWaitingPlayers t numberOfPlayersConnected expectedNumberOfPlayers
-    windowTitleStr _         = str (msgWaitingConnect t)
+    windowTitleStr Host      = str $ _msgWaitingPlayers t numberOfPlayersConnected expectedNumberOfPlayers
+    windowTitleStr _         = str (_msgWaitingConnect t)
     playersInfo              = Map.toList (ps ^. networkState . NS.playersIdentities)
     playersNameWidgets       = map (\ (pid,  pname) -> C.hCenter $ str $ pname <> " " <> "(" <> pid <> ")" ) playersInfo
     playersConnectionWidget  = playersNameWidgets <> [ C.hCenter $ str "..." ]
-    gameCodeWidget           = C.hCenter $ str $ msgGameCodeLabel t <> gc
+    gameCodeWidget           = C.hCenter $ str $ _msgGameCodeLabel t <> gc
     contentWidget            = C.center $ vBox [ vBox $  [ fill ' ' ] <> playersConnectionWidget <> [ fill ' ', B.hBorder ]
                                                , vLimitPercent 10 gameCodeWidget
                                                ]
@@ -320,18 +321,16 @@ widget ps = subMenus <> [ hBox [ leftPanel
                                ]
                         ]
   where
+    t                = ps ^. (translations.mainMenuTranslations)
     subMenus         = gameInitializationSubMenu ps <> onlineGameSubMenu ps <> onlineGameInitializationSubMenu ps <> onlineLobby ps
     sidePanelStyle a = C.center . withBorderStyle BS.unicodeRounded . B.border . withAttr (attrName a) . str
     leftPanel        = sidePanelStyle "bluecard"   $ ps^.programResources.blueCard35x53
     rightPanel       = sidePanelStyle "purplecard" $ ps^.programResources.purpleCard35x53
 
     middlePanel      = vBox [ C.hCenter $ str $ ps^.programResources.menuGameTitle
-                            , C.hCenter $ B.borderWithLabel (str (titleMainMenu t)) $ hLimit (titleWidth ps) $ C.center menuOptions
+                            , C.hCenter $ B.borderWithLabel (str (_titleMainMenu t)) $ hLimit (titleWidth ps) $ C.center menuOptions
                             ]
-    
-        where t = ps ^. translations
     menuOptions      = buttonMenu (mainMenuButtons t) (mainMenuState.mainMenuIndex) ps
-        where t = ps ^. translations
 
 --  vim: set sts=2 ts=2 sw=2 tw=120 et :
 

@@ -46,6 +46,7 @@ import qualified BrickNetworkBridge as BNB
 import System.Environment (lookupEnv)
 import Data.List (isPrefixOf)
 import I18n
+import I18n.Types
 
 appEvent :: BrickEvent AppFocus BNB.NetworkBrickEvent -> EventM AppFocus ProgramState ()
 appEvent e = use currentFocus >>= \ cf -> case focusGetCurrent cf of

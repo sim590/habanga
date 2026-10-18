@@ -102,7 +102,7 @@ goBackOrQuit = do
 
 playCard :: Either Card Card -> T.EventM AppFocus ProgramState ()
 playCard sidedCard = do
-  t <- use translations
+  t <- use (translations.gameViewTranslations)
   thePlayers <- use (gameState . players)
   let
     currentPlayer = head thePlayers
@@ -112,8 +112,8 @@ playCard sidedCard = do
   cardsDrawn <- runMaybeT $ Game.processPlayerTurnAction sidedCard
 
   let
-    cardsDrawnLog = [logDrewCards t (cardsDrawn^?!_Just) | ((>0) <$> cardsDrawn) == Just True]
-    playerLog     = unlines $ [ logPlayedCard t (currentPlayer^.name) (show (card^.value)) cardColorStr 
+    cardsDrawnLog = [_logDrewCards t (cardsDrawn^?!_Just) | ((>0) <$> cardsDrawn) == Just True]
+    playerLog     = unlines $ [ _logPlayedCard t (currentPlayer^.name) (show (card^.value)) cardColorStr 
                               ] <> cardsDrawnLog
                                 <> ["\n"]
   gameViewState . gameLog %= (:) playerLog
@@ -169,10 +169,12 @@ event ev = do
 winnerDialog :: ProgramState -> [Widget AppFocus]
 winnerDialog ps =
   let
-    t     = ps ^. translations
-    msg w = fill ' ' <+> str (w <> msgWon t) <+> fill ' '
+    gt     = ps ^. (translations.gameViewTranslations)
+    mt     = ps ^. (translations.mainMenuTranslations)
+
+    msg w = fill ' ' <+> str (w <> _msgWon gt) <+> fill ' '
    in case ps^.gameViewState.winner of
-        Just winnerName -> [ C.centerLayer $ B.borderWithLabel (str (titleGameOver t))
+        Just winnerName -> [ C.centerLayer $ B.borderWithLabel (str (_titleGameOver mt))
                                            $ popUpWidgetDimensions
                                            $ vBox [ fill ' ', msg winnerName, fill ' ' ]
                            ]
@@ -184,26 +186,27 @@ otherPlayerTurnWidget ps
   | not (OnlineGame.isMyTurn ns) = [ C.centerLayer $ B.borderWithLabel popUpTitle $ popUpWidgetDimensions $ vBox [ fill ' ', msg, fill ' ' ] ]
   | otherwise                    = []
     where
-      t             = ps ^. translations
+      t             = ps ^. (translations.gameViewTranslations)
       ns            = ps ^. networkState
-      popUpTitle    = str $ playersTurn t (currentPlayer ^. name)
-      msg           = C.center $ str (msgPleaseWait t)
+      popUpTitle    = str $ _playersTurn t (currentPlayer ^. name)
+      msg           = C.center $ str (_msgPleaseWait t)
       currentPlayer = head $ ps ^. gameState . players
 
 widget :: ProgramState -> [Widget AppFocus]
 widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> gameUI
   where
-    t                  = ps ^. translations
+    gt                  = ps ^. (translations.gameViewTranslations)
+    mt                  = ps ^. (translations.mainMenuTranslations)
     ns                 = ps ^. networkState
     players'           = ps ^. gameState . players
-    gameUI             = [ vBox [ C.hCenter $ str $ labelPlayer t <> currentPlayer ^. name <> labelTurn t <> show (ns ^. NS.turnNumber)
+    gameUI             = [ vBox [ C.hCenter $ str $ _labelPlayer gt <> currentPlayer ^. name <> _labelTurn gt <> show (ns ^. NS.turnNumber)
                                 , C.hCenter $ hBox $ playerCardsButtons currentCardsInHand
                                 , C.center (vBox $ map hBox cardsOnTableMatrix)
-                                , C.hCenter $ B.borderWithLabel (str (titleKeyBindings t)) $ vLimit (length keyBindText) keybindBox
+                                , C.hCenter $ B.borderWithLabel (str (_titleKeyBindings mt)) $ vLimit (length keyBindText) keybindBox
                                 ]
                          ]
     gameLogTextWidget  = vBox $ map str $ ps^.gameViewState.gameLog
-    gameLogWidget      = translateBy (T.Location (1, 10)) $ B.borderWithLabel (str $ gameLogTitle t)
+    gameLogWidget      = translateBy (T.Location (1, 10)) $ B.borderWithLabel (str $ _gameLogTitle gt)
                                                           $ vLimit 15
                                                           $ hLimit 30
                                                           $ viewport (Game (Just GameLog)) T.Vertical gameLogTextWidget
@@ -211,10 +214,10 @@ widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> ga
                               $ over (traverse.ix 0) (\ w ->  padLeft (Pad 2) w <+> fill ' ')
                               $ over (traverse.ix 1) (\ w -> w <+> fill ' ')
                               $ over (traverse.traverse) str keyBindText
-    keyBindText        = [ [kbLeftRight t, kbSelectCard t] 
-                         , ["(z)"        , kbPlayLeft t  ]
-                         , ["(c)"        , kbPlayRight t ]
-                         , ["(q)"        , kbQuit t      ]
+    keyBindText        = [ [_kbLeftRight gt, _kbSelectCard gt] 
+                         , ["(z)",           _kbPlayLeft gt  ]
+                         , ["(c)",           _kbPlayRight gt ]
+                         , ["(q)",           _kbQuit gt      ]
                          ]
     btn i c            = button (show $ c^.value) i 15 (ps^.gameViewState.gameViewIndex) (colorAttrFromCard c True)
     playerCardsButtons = zipWith (\ i c -> C.hCenter $ withAttr (colorAttrFromCard c False) $ btn i c) [0..]

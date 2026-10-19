@@ -69,7 +69,6 @@ import qualified BrickNetworkBridge
 import qualified BrickNetworkBridge as BNB
 import qualified NetworkState as NS
 
-import I18n
 import I18n.Types
 
 type MenuButtonActionPairList = [(NamedButton AppFocus, T.EventM AppFocus ProgramState ())]

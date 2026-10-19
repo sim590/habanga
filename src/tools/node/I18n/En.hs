@@ -4,7 +4,7 @@ import I18n.Types
 
 enTranslations :: Translations
 enTranslations = Translations
-         { _errInvalidParameter         = "err.. One of the parameters is invalid!"
+                                     { _errInvalidParameter         = "err.. One of the parameters is invalid!"
                                      , _errInvalidPlayerCount       = \n -> "err.. The number of players '" <> n <> "' could not be parsed as an integer!"
                                      , _msgDrawCards                = \n -> "You draw " <> show n <> " card(s)!"
                                      , _errCannotPlayCard           = "err.. Unable to play this card!"

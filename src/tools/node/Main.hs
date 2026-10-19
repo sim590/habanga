@@ -278,14 +278,14 @@ main = do
   netChan  <- newTChanIO
   mv       <- myForkIO $ Network.loop def (NetworkTwoWayChannel reqChan netChan)
   envMLang <- lookupEnv "LANG"
-  let l = languageFromString envMLang
+  let userLang = languageFromString envMLang
   void $ M.defaultMain app $ NodeState { _focusRing                 = F.focusRing $ enumFrom minBound
                                        , _inputEditor               = E.editor Input Nothing ""
                                        , _logText                   = []
                                        , _gameState                 = def
                                        , _nodeNetworkState          = nsTV
                                        , _nodeNetworkRequestChannel = reqChan
-                                       , _translations              = getTranslations l
+                                       , _translations              = getTranslations userLang
                                        }
   atomically $ modifyTVar nsTV $ status .~ ShuttingDown
   readMVar mv

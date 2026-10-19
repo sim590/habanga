@@ -13,16 +13,6 @@ data Language = French | English
 
 instance Default Language where
   def = French 
---make class Translation a where  --in core
---        frTranslations :: a
---        enTranslations :: a
---getTranslations :: Translations a => Language -> a where the translations type is chosen
---getTranslations French = frTranslations
---getTranslations English = enTranslations
---data Translations = Translations { tuiTranslations :: Translations
---                                 , nodeTranslations :: Translations
---                                 , guiTranslations :: Translations 
---                                 }
 
 languageFromString :: Maybe String -> Language
 languageFromString mlang = case mlang of

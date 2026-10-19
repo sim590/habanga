@@ -56,7 +56,6 @@ import qualified OnlineGame
 import ProgramState
 import qualified BrickNetworkBridge as BNB
 
-import I18n
 import I18n.Types
 
 colorAttrFromCard :: Card -> Bool -> AttrName

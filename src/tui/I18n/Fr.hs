@@ -4,8 +4,8 @@ import I18n.Types
 
 frTranslations :: Translations
 frTranslations = Translations { _mainMenuTranslations = _mainMenuTranslations
-                                 , _gameViewTranslations = _gameViewTranslations
-                                 }
+                              , _gameViewTranslations = _gameViewTranslations
+                              }
     where
         _mainMenuTranslations = MainMenuTranslations { _btnPlay           = "Jouer"
                                                      , _btnOnlinePlay     = "Jouer en ligne"

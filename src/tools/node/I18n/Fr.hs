@@ -3,8 +3,7 @@ module I18n.Fr where
 import I18n.Types
    
 frTranslations :: Translations
-frTranslations = Translations
-                                     { _errInvalidParameter         = "err.. Un des paramètres est invalide!"
+frTranslations = Translations        { _errInvalidParameter         = "err.. Un des paramètres est invalide!"
                                      , _errInvalidPlayerCount       = \n -> "err.. Le nombre de joueurs '" <> n <> "' n'a pas pu être résolu à un entier!"
                                      , _msgDrawCards                = \n -> "Vous pigez " <> show n <> " carte(s)!"
                                      , _errCannotPlayCard           = "err.. Impossible de jouer cette carte!"

@@ -56,6 +56,8 @@ import qualified OnlineGame
 import ProgramState
 import qualified BrickNetworkBridge as BNB
 
+import I18n.Types
+
 colorAttrFromCard :: Card -> Bool -> AttrName
 colorAttrFromCard c selected
   | selected = case c^.color of
@@ -99,18 +101,18 @@ goBackOrQuit = do
 
 playCard :: Either Card Card -> T.EventM AppFocus ProgramState ()
 playCard sidedCard = do
+  t <- use (translations.gameViewTranslations)
   thePlayers <- use (gameState . players)
   let
     currentPlayer = head thePlayers
-    cardColorStr  = Text.unpack $ Text.toLower $ Text.pack $ maybe "gris" show (card^.color)
+    cardColorStr  = displayColor t (card^.color)
     card          = fromEither sidedCard
 
   cardsDrawn <- runMaybeT $ Game.processPlayerTurnAction sidedCard
 
   let
-    cardsDrawnLog = [">> " <> "pige " <> show (cardsDrawn^?!_Just) <> " carte(s)!" | ((>0) <$> cardsDrawn) == Just True]
-    playerLog     = unlines $ [ "Joueur " <> currentPlayer^.name <> ": "
-                              , ">> "     <> "a joué le " <> show (card^.value) <> " " <> cardColorStr <> "."
+    cardsDrawnLog = [_logDrewCards t (cardsDrawn^?!_Just) | ((>0) <$> cardsDrawn) == Just True]
+    playerLog     = unlines $ [ _logPlayedCard t (currentPlayer^.name) (show (card^.value)) cardColorStr 
                               ] <> cardsDrawnLog
                                 <> ["\n"]
   gameViewState . gameLog %= (:) playerLog
@@ -141,7 +143,7 @@ playMyTurn side = use networkState >>= \ ns -> whenIsLocalPlayerTurn ns $ do
 event :: T.BrickEvent AppFocus BNB.NetworkBrickEvent -> T.EventM AppFocus ProgramState ()
 event (T.AppEvent (BNB.NetworkBrickUpdate ns)) = do
   reqChan <- use networkRequestChannel
-  turns <- OnlineGame.consumeConsecutivePlayerTurns ns (reqChan ^?! _Just)
+  turns   <- OnlineGame.consumeConsecutivePlayerTurns ns (reqChan ^?! _Just)
   forM_ turns $ \ (_, card) -> playCard card
   networkState .= ns
 event ev = do
@@ -166,9 +168,12 @@ event ev = do
 winnerDialog :: ProgramState -> [Widget AppFocus]
 winnerDialog ps =
   let
-    msg w = fill ' ' <+> str (w <> " a gagné!") <+> fill ' '
+    gt     = ps ^. (translations.gameViewTranslations)
+    mt     = ps ^. (translations.mainMenuTranslations)
+
+    msg w = fill ' ' <+> str (w <> _msgWon gt) <+> fill ' '
    in case ps^.gameViewState.winner of
-        Just winnerName -> [ C.centerLayer $ B.borderWithLabel (str "Fin de partie!")
+        Just winnerName -> [ C.centerLayer $ B.borderWithLabel (str (_titleGameOver mt))
                                            $ popUpWidgetDimensions
                                            $ vBox [ fill ' ', msg winnerName, fill ' ' ]
                            ]
@@ -180,24 +185,27 @@ otherPlayerTurnWidget ps
   | not (OnlineGame.isMyTurn ns) = [ C.centerLayer $ B.borderWithLabel popUpTitle $ popUpWidgetDimensions $ vBox [ fill ' ', msg, fill ' ' ] ]
   | otherwise                    = []
     where
+      t             = ps ^. (translations.gameViewTranslations)
       ns            = ps ^. networkState
-      popUpTitle    = str $ "Tour de " <> currentPlayer ^. name
-      msg           = C.center $ str "Veuillez patientez..."
+      popUpTitle    = str $ _playersTurn t (currentPlayer ^. name)
+      msg           = C.center $ str (_msgPleaseWait t)
       currentPlayer = head $ ps ^. gameState . players
 
 widget :: ProgramState -> [Widget AppFocus]
 widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> gameUI
   where
+    gt                  = ps ^. (translations.gameViewTranslations)
+    mt                  = ps ^. (translations.mainMenuTranslations)
     ns                 = ps ^. networkState
     players'           = ps ^. gameState . players
-    gameUI             = [ vBox [ C.hCenter $ str $ "Joueur: " <> currentPlayer ^. name <> ", Tour: " <> show (ns ^. NS.turnNumber)
+    gameUI             = [ vBox [ C.hCenter $ str $ _labelPlayer gt <> currentPlayer ^. name <> _labelTurn gt <> show (ns ^. NS.turnNumber)
                                 , C.hCenter $ hBox $ playerCardsButtons currentCardsInHand
                                 , C.center (vBox $ map hBox cardsOnTableMatrix)
-                                , C.hCenter $ B.borderWithLabel (str "Touches") $ vLimit (length keyBindText) keybindBox
+                                , C.hCenter $ B.borderWithLabel (str (_titleKeyBindings mt)) $ vLimit (length keyBindText) keybindBox
                                 ]
                          ]
     gameLogTextWidget  = vBox $ map str $ ps^.gameViewState.gameLog
-    gameLogWidget      = translateBy (T.Location (1, 10)) $ B.borderWithLabel (str "Journal du jeu")
+    gameLogWidget      = translateBy (T.Location (1, 10)) $ B.borderWithLabel (str $ _gameLogTitle gt)
                                                           $ vLimit 15
                                                           $ hLimit 30
                                                           $ viewport (Game (Just GameLog)) T.Vertical gameLogTextWidget
@@ -205,10 +213,10 @@ widget ps = winnerDialog ps <> otherPlayerTurnWidget ps <> [gameLogWidget] <> ga
                               $ over (traverse.ix 0) (\ w ->  padLeft (Pad 2) w <+> fill ' ')
                               $ over (traverse.ix 1) (\ w -> w <+> fill ' ')
                               $ over (traverse.traverse) str keyBindText
-    keyBindText        = [ ["gauche/droite", "Sélectionner une carte"]
-                         , ["(z)",           "Jouer à gauche"        ]
-                         , ["(c)",           "Jouer à droite"        ]
-                         , ["(q)",           "Quitter"               ]
+    keyBindText        = [ [_kbLeftRight gt, _kbSelectCard gt] 
+                         , ["(z)",           _kbPlayLeft gt  ]
+                         , ["(c)",           _kbPlayRight gt ]
+                         , ["(q)",           _kbQuit gt      ]
                          ]
     btn i c            = button (show $ c^.value) i 15 (ps^.gameViewState.gameViewIndex) (colorAttrFromCard c True)
     playerCardsButtons = zipWith (\ i c -> C.hCenter $ withAttr (colorAttrFromCard c False) $ btn i c) [0..]

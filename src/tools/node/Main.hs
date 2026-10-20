@@ -55,6 +55,10 @@ import Network
 import NetworkState
 import qualified OnlineGame
 
+import System.Environment (lookupEnv)
+import I18n
+import I18n.Types
+
 data AppFocus = Input
               | Log
               | HelpBox
@@ -65,6 +69,7 @@ data NodeState = NodeState { _focusRing                 :: F.FocusRing AppFocus
                            , _gameState                 :: GameState
                            , _nodeNetworkState          :: TVar NetworkState
                            , _nodeNetworkRequestChannel :: TChan NetworkRequest
+                           , _translations              :: Translations
                            }
 makeLenses ''NodeState
 
@@ -83,18 +88,19 @@ executeCmd = do
   gs      <- use gameState
   nsTV    <- use nodeNetworkState
   reqChan <- use nodeNetworkRequestChannel
+  t       <- use translations
   let
     cmdline      = head $ E.getEditContents ie
     cmdlineToks  = words cmdline
     cmd          = head cmdlineToks
     args         = tail cmdlineToks
-    logInvalidParameter = logText %= (<>["err.. Un des paramètres est invalide!"])
+    logInvalidParameter = logText %= (<>[_errInvalidParameter t])
     announceGame = case args of
       [n, gc, playerName] -> do
         let mn              = readMaybe n
             theGameSettings = OnlineGameSettings gc (fromMaybe 0 mn)
         liftIO $ atomically $ writeTChan reqChan $ GameAnnounce theGameSettings playerName
-        when (isNothing mn) $ logText %= (<>["err.. Le nombre de joueurs '" <> n <> "' n'a pas pu être résolu à un entier!"])
+        when (isNothing mn) $ logText %= (<>[_errInvalidPlayerCount t n])
       _ -> logInvalidParameter
     requestJoinGame = case args of
       [gc, playerName] -> liftIO $ atomically $ writeTChan reqChan $ JoinGame gc playerName
@@ -127,10 +133,10 @@ executeCmd = do
             case mNumberOfCardsDrawn of
               Just nCardsToDraw  -> do
                 when (nCardsToDraw > 0) $
-                  logText %= (<> ["Vous pigez " <> show nCardsToDraw <> " carte(s)!"])
+                  logText %= (<> [_msgDrawCards t nCardsToDraw])
                 gameState .= gs'
                 liftIO $ atomically $ writeTChan reqChan pt
-              Nothing -> logText %= (<>["err.. Impossible de jouer cette carte!"])
+              Nothing -> logText %= (<>[_errCannotPlayCard t])
           _ -> logInvalidParameter
       _ -> logInvalidParameter
     processOtherPlayerTurn = liftIO (readTVarIO nsTV) >>= \ netState -> do
@@ -143,14 +149,14 @@ executeCmd = do
           gameState .= gs'
           liftIO $ atomically $ modifyTVar nsTV $ \ ns -> ns & gameTurns  %~ Map.delete n
                                                              & turnNumber +~ 1
-        _ -> logText %= (<>["err.. Aucun tour à traiter!"])
+        _ -> logText %= (<>[_errNoTurnToProcess t])
     resetNetwork = liftIO $ atomically $ writeTChan reqChan ResetNetwork
     printGameState = do
       netState <- liftIO $ readTVarIO nsTV
       logText %= (<> lines (show gs))
       logText %= (<> lines (show netState))
     exec
-      | cmd == "aide"                                  = focusRing %= F.focusSetCurrent HelpBox
+      | cmd == _helpUsageHelp t                        = focusRing %= F.focusSetCurrent HelpBox
       | cmd `elem` [ "ag",  "announceGame"           ] = announceGame
       | cmd `elem` [ "rj",  "requestJoinGame"        ] = requestJoinGame
       | cmd `elem` [ "sg",  "startGame"              ] = startGame
@@ -160,7 +166,7 @@ executeCmd = do
       | cmd `elem` [ "pgs", "printGameState"         ] = printGameState
       | cmd `elem` [ "cl",  "clearLog"               ] = clearLog
       | cmd `elem` [ "q",   "quit"                   ] = M.halt
-      | otherwise                                      = logText %= (<>["err.. impossible d'exécuter cette commande!"])
+      | otherwise                                      = logText %= (<>[_errUnkownCommand t])
   unless (null cmdline) $ do
     logText %= (<>[">>> " <> cmdline])
     exec
@@ -193,61 +199,55 @@ attrsMap = attrMap defAttr [ ]
 drawUI :: NodeState -> [Widget AppFocus]
 drawUI ns = helpBox <> [mainUI]
   where
+    t = ns ^. translations
     mainUI           = vBox [ B.border $ viewport Log T.Vertical $ vBox $ map str $ ns ^. logText
                             , B.border $ str "node> " <+> vLimit 1 inputTextBox
                             ]
     inputTextBox     = F.withFocusRing (ns^.focusRing) (E.renderEditor (str . head)) (ns^.inputEditor)
-    cmdsHelpText     = B.borderWithLabel (str "COMMANDES") $ str $ unlines
-                       [ "aide"
-                       , "  Affiche l'aide de cet utilitaire."
+    cmdsHelpText     = B.borderWithLabel (str (_titleCommands t)) $ str $ unlines
+                       [ _helpUsageHelp t
+                       , _helpDescHelp t
                        , ""
-                       , "ag {n} {code} {nomHôte}"
-                       , "announceGame {n} {code} {nomHôte}"
-                       , "  Annonce une partie à {n} joueurs sur le réseau"
-                       , "  avec un code {code} et un nom de joueur de"
-                       , "  l'hôte {nomHôte}."
+                       , _helpUsageAnnounceGameShort t
+                       , _helpUsageAnnounceGame t
+                       , _helpDescAnnounceGame t
                        , ""
-                       , "rj {code} {nomJoueur}"
-                       , "requestJoinGame {code} {nomJoueur}"
-                       , "  Demande d'accéder à la partie en tant que {nomJoueur}"
-                       , "  en utilisant le code {code}."
+                       , _helpUsageJoinGameShort t
+                       , _helpUsageJoinGame t
+                       , _helpDescJoinGame t
                        , ""
                        , "sg"
                        , "startGame"
-                       , "  Initialise l'état du jeu et prépare la couche réseau."
+                       , _helpDescStartGame t
                        , ""
                        , "pt"
-                       , "playTurn {numéro} {couleur} {emplacement}"
-                       , "  Jouer à son tour une carte de numéro {numéro} et de couleur"
-                       , "  {couleur} à l'emplacement {emplacement} (gauche/droite)."
+                       , _helpUsagePlayTurn t
+                       , _helpDescPlayTurn t
                        , ""
                        , "po"
                        , "processOtherPlayerTurn"
-                       , "  Joue le tour d'un autre joueur. Les tours sont accumulés"
-                       , "  en cache. Cette commande doit être exécutée pour chaque tour"
-                       , "  des autres joueurs. Celle-ci n'aura un effet que si le tour"
-                       , "  du joueur a déjà été reçu."
+                       , _helpDescProcessOtherTurn t
                        , ""
                        , "rs"
                        , "resetNetwork"
-                       , "  Réinitialisation du réseau et de l'état du jeu."
+                       , _helpDescResetNetwork t
                        , ""
                        , "pgs"
                        , "printGameState"
-                       , "  Affiche l'état actuel du jeu."
+                       , _helpDescPrintGameState t
                        , ""
                        , "cl"
                        , "clearLog"
-                       , "  Efface le contenu du journal."
+                       , _helpDescClearLog t
                        , ""
                        , "q"
                        , "quit"
-                       , "  Quitter le programme."
+                       , _helpDescQuit t
                        ]
-    keybindsHelpText = B.borderWithLabel (str "TOUCHES") $ str $ unlines
-                       [ "?:      Affiche l'aide de cet utilitaire."
-                       , "CTRL-l: Efface le contenu du journal."
-                       , "ESC, q: Quitter la fenêtre."
+    keybindsHelpText = B.borderWithLabel (str (_titleKeyBindings t)) $ str $ unlines
+                       [ _kbHelp t
+                       , _kbClearLog t
+                       , _kbCloseWindow t
                        ]
     helpBox      = case F.focusGetCurrent (ns ^. focusRing) of
                      Just HelpBox -> [ C.centerLayer $ hLimit 60 $ vBox [ C.hCenter cmdsHelpText
@@ -273,16 +273,19 @@ myForkIO io = do
 
 main :: IO ()
 main = do
-  nsTV    <- liftIO (newTVarIO def)
-  reqChan <- newTChanIO
-  netChan <- newTChanIO
-  mv      <- myForkIO $ Network.loop def (NetworkTwoWayChannel reqChan netChan)
+  nsTV     <- liftIO (newTVarIO def)
+  reqChan  <- newTChanIO
+  netChan  <- newTChanIO
+  mv       <- myForkIO $ Network.loop def (NetworkTwoWayChannel reqChan netChan)
+  envMLang <- lookupEnv "LANG"
+  let userLang = languageFromString envMLang
   void $ M.defaultMain app $ NodeState { _focusRing                 = F.focusRing $ enumFrom minBound
                                        , _inputEditor               = E.editor Input Nothing ""
                                        , _logText                   = []
                                        , _gameState                 = def
                                        , _nodeNetworkState          = nsTV
                                        , _nodeNetworkRequestChannel = reqChan
+                                       , _translations              = getTranslations userLang
                                        }
   atomically $ modifyTVar nsTV $ status .~ ShuttingDown
   readMVar mv

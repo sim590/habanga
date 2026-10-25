@@ -33,6 +33,9 @@ import NetworkState ( NetworkState
                     )
 import qualified BrickNetworkBridge as BNB
 
+import I18n
+import I18n.Types
+
 _HABANGA_MAX_PLAYER_COUNT_ :: Int
 _HABANGA_MAX_PLAYER_COUNT_ = 6
 
@@ -138,6 +141,7 @@ data ProgramState = ProgramState { _gameState             :: GameState
                                  , _brickEventChannel     :: Maybe (BChan BNB.NetworkBrickEvent)
                                  , _networkMV             :: Maybe (MVar ())
                                  , _brickNetworkBridgeMV  :: Maybe (MVar ())
+                                 , _translations          :: Translations
                                  }
 makeLenses ''ProgramState
 
@@ -160,6 +164,7 @@ instance Default ProgramState where
                      , _brickEventChannel     = Nothing
                      , _networkMV             = Nothing
                      , _brickNetworkBridgeMV  = Nothing
+                     , _translations          = getTranslations def 
                      }
 
 instance GameStated ProgramState where
